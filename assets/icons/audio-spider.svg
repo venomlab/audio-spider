@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Audio Spider app icon</title>
+  <desc id="desc">A stylized robotic spider with a speaker body, audio waves, and equalizer bars.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="68%">
+      <stop offset="0%" stop-color="#263B68"/>
+      <stop offset="48%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#05070C"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E5EEF9"/>
+      <stop offset="0.18" stop-color="#6B7C93"/>
+      <stop offset="0.42" stop-color="#182335"/>
+      <stop offset="0.72" stop-color="#0A0E18"/>
+      <stop offset="1" stop-color="#C8D6EA"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="27%" stop-color="#38BDF8"/>
+      <stop offset="55%" stop-color="#FACC15"/>
+      <stop offset="100%" stop-color="#FB923C"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="50%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#FB923C"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <style>
+      .leg { fill:none; stroke:url(#metal); stroke-width:20; stroke-linecap:round; stroke-linejoin:round; }
+      .leg-tip { fill:none; stroke:#05070C; stroke-width:8; stroke-linecap:round; opacity:.9; }
+      .bar { rx:4; filter:url(#glow); }
+      .shine { fill:#F8FAFC; opacity:.72; }
+    </style>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="205" fill="none" stroke="#60A5FA" stroke-opacity=".08" stroke-width="28"/>
+
+  <!-- audio wave -->
+  <path d="M78 151 H139 L151 131 L163 174 L178 105 L194 196 L209 143 L224 162 H288 L303 138 L319 188 L333 116 L349 183 L365 145 L379 165 H434"
+        fill="none" stroke="url(#wave)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+
+  <!-- equalizer bars -->
+  <g opacity=".95">
+    <rect class="bar" x="76" y="329" width="15" height="47" fill="#22C55E"/>
+    <rect class="bar" x="99" y="304" width="15" height="72" fill="#84CC16"/>
+    <rect class="bar" x="122" y="342" width="15" height="34" fill="#22C55E"/>
+    <rect class="bar" x="375" y="339" width="15" height="37" fill="#F97316"/>
+    <rect class="bar" x="398" y="295" width="15" height="81" fill="#F59E0B"/>
+    <rect class="bar" x="421" y="318" width="15" height="58" fill="#FB923C"/>
+  </g>
+
+  <!-- spider legs behind body -->
+  <g filter="url(#softShadow)">
+    <path class="leg" d="M217 243 C158 209 111 187 70 163"/>
+    <path class="leg-tip" d="M92 176 C75 164 61 151 48 136"/>
+    <path class="leg" d="M211 271 C147 269 100 254 55 228"/>
+    <path class="leg-tip" d="M75 236 C55 229 39 219 25 205"/>
+    <path class="leg" d="M215 299 C155 329 118 356 82 395"/>
+    <path class="leg-tip" d="M101 374 C85 393 72 411 62 431"/>
+    <path class="leg" d="M226 319 C184 359 165 390 151 438"/>
+    <path class="leg-tip" d="M164 413 C155 433 151 451 149 470"/>
+
+    <path class="leg" d="M295 243 C354 209 401 187 442 163"/>
+    <path class="leg-tip" d="M420 176 C437 164 451 151 464 136"/>
+    <path class="leg" d="M301 271 C365 269 412 254 457 228"/>
+    <path class="leg-tip" d="M437 236 C457 229 473 219 487 205"/>
+    <path class="leg" d="M297 299 C357 329 394 356 430 395"/>
+    <path class="leg-tip" d="M411 374 C427 393 440 411 450 431"/>
+    <path class="leg" d="M286 319 C328 359 347 390 361 438"/>
+    <path class="leg-tip" d="M348 413 C357 433 361 451 363 470"/>
+  </g>
+
+  <!-- abdomen/head -->
+  <ellipse cx="256" cy="214" rx="80" ry="58" fill="url(#metal)" stroke="#E5E7EB" stroke-opacity=".35" stroke-width="3"/>
+  <path d="M256 162 C244 187 244 221 256 263 C268 221 268 187 256 162Z" fill="#F8FAFC" opacity=".78"/>
+  <path d="M219 171 C205 200 207 230 223 259" fill="none" stroke="#F8FAFC" stroke-opacity=".33" stroke-width="5" stroke-linecap="round"/>
+  <path d="M293 171 C307 200 305 230 289 259" fill="none" stroke="#F8FAFC" stroke-opacity=".33" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- speaker body -->
+  <g filter="url(#softShadow)">
+    <circle cx="256" cy="285" r="97" fill="#070A12" stroke="url(#ring)" stroke-width="15"/>
+    <circle cx="256" cy="285" r="73" fill="#111827" stroke="#CBD5E1" stroke-opacity=".55" stroke-width="5"/>
+    <circle cx="256" cy="285" r="48" fill="#05070C" stroke="#475569" stroke-width="7"/>
+    <circle cx="256" cy="285" r="24" fill="url(#metal)"/>
+    <circle cx="247" cy="276" r="7" fill="#FFFFFF" opacity=".5"/>
+  </g>
+
+  <!-- fangs / subtle spider identity -->
+  <path d="M223 366 L238 398 L249 362" fill="#E5E7EB" opacity=".82"/>
+  <path d="M289 366 L274 398 L263 362" fill="#E5E7EB" opacity=".82"/>
+
+  <!-- tiny routing nodes hinting PulseAudio visual patching -->
+  <g fill="#93C5FD" filter="url(#glow)">
+    <circle cx="162" cy="242" r="6"/>
+    <circle cx="350" cy="242" r="6"/>
+    <circle cx="133" cy="303" r="5"/>
+    <circle cx="379" cy="303" r="5"/>
+  </g>
+</svg>

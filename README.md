@@ -24,10 +24,32 @@ System packages (Debian/Ubuntu naming):
 - `python3-gi`
 - `gir1.2-gtk-3.0`
 - `gir1.2-goocanvas-2.0`
-- `gir1.2-appindicator3-0.1` (optional — tray icon)
+- `gir1.2-ayatanaappindicator3-0.1` (optional — tray icon)
 - `libpulse0` + working PulseAudio (or PipeWire's `pulseaudio` shim)
 
 ## Install
+
+### From .deb (Ubuntu 22.04 / 24.04)
+
+```sh
+sudo apt install ./audio-spider_0.1.0-1_all.deb
+```
+
+APT pulls in `python3-gi`, `gir1.2-gtk-3.0`, `gir1.2-goocanvas-2.0`,
+`python3-pulsectl`, `libpulse0` and (recommended)
+`gir1.2-ayatanaappindicator3-0.1`. Launches from the application menu;
+an XDG autostart entry starts it minimised to tray on next login.
+
+### Build the .deb yourself (no host pollution)
+
+Needs Docker; everything else stays inside a disposable Ubuntu 22.04
+container.
+
+```sh
+scripts/build-deb.sh    # writes dist/audio-spider_0.1.0-1_all.deb
+```
+
+### From source (development)
 
 ```sh
 uv sync

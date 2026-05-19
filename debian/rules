@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME=audio_spider
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+# Tests run via `pytest` in the dev environment; skipping during deb build
+# avoids dragging pytest/python3-gi/python3-pulsectl into Build-Depends.
+override_dh_auto_test:

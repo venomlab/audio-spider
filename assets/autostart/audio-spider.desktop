@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Audio Spider
+Comment=Apply PulseAudio routing config at login (starts minimized to tray)
+Exec=audio-spider --minimized
+Icon=audio-spider
+Terminal=false
+Categories=AudioVideo;Audio;
+X-GNOME-Autostart-enabled=true
+Hidden=false

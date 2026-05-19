@@ -26,7 +26,7 @@ class TrayIcon:
         on_show: Callable[[], None],
         on_reload: Callable[[], None],
         on_quit: Callable[[], None],
-        icon_name: str = "audio-card",
+        icon_name: str = "audio-spider",
         app_id: str = "audio-spider",
     ) -> None:
         self._on_show = on_show

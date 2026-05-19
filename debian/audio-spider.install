@@ -1,0 +1,3 @@
+assets/audio-spider.desktop usr/share/applications
+assets/autostart/audio-spider.desktop etc/xdg/autostart
+assets/icons/audio-spider.svg usr/share/icons/hicolor/scalable/apps

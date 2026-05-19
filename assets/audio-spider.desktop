@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Audio Spider
+GenericName=PulseAudio Routing
+Comment=Visual flow-graph editor for PulseAudio sinks, sources and loopbacks
+Exec=audio-spider
+Icon=audio-spider
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+Keywords=audio;sound;pulseaudio;mixer;routing;sink;source;loopback;
+StartupNotify=true

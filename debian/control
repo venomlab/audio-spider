@@ -1,0 +1,33 @@
+Source: audio-spider
+Section: sound
+Priority: optional
+Maintainer: zibertscrem <zibertscrem@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3-all,
+               python3-hatchling,
+               pybuild-plugin-pyproject
+Standards-Version: 4.6.2
+Homepage: https://github.com/zibertscrem/audio-spider
+Rules-Requires-Root: no
+
+Package: audio-spider
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3 (>= 3.10),
+         python3-click,
+         python3-pulsectl,
+         python3-gi,
+         gir1.2-gtk-3.0,
+         gir1.2-goocanvas-2.0,
+         libpulse0
+Recommends: gir1.2-ayatanaappindicator3-0.1
+Description: Visual PulseAudio routing editor (GTK3)
+ Audio Spider is a flow-graph editor for PulseAudio. Drag virtual sinks,
+ combine real speakers into groups, and route inputs to outputs by drawing
+ loopbacks on a canvas. Configuration is persisted to
+ $XDG_CONFIG_HOME/audio_spider/config.json and re-applied at login.
+ .
+ Supports headless application of a saved config (--headless), tray-icon
+ minimisation, and live PulseAudio event reconciliation.

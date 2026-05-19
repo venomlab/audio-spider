@@ -7,9 +7,13 @@ name = "audio-spider"
 version = "0.1.0"
 description = "GTK3 flow-graph editor for PulseAudio: combine speakers into groups and route inputs to outputs visually"
 readme = "README.md"
-requires-python = ">=3.12"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
 classifiers = [
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
@@ -31,7 +35,7 @@ dev = [
 packages = [ "audio_spider" ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py310"
 line-length = 120
 indent-width = 4
 output-format = "concise"
@@ -47,6 +51,7 @@ lint.extend-ignore = [
   "E501",
   "FBT",
   "FIX",
+  "PERF203", # try/except in loop is fine on 3.11+; we still target 3.10
   "PL",
   "PT011",
   "PTH",
@@ -71,6 +76,7 @@ markers = [
 [tool.mypy]
 strict = true
 ignore_missing_imports = true
+python_version = "3.10"
 # gi.repository (GTK/GooCanvas/GObject) has no type stubs — subclasses
 # of ApplicationWindow/Object/CanvasGroup/etc. are unavoidably Any-based.
 disallow_subclassing_any = false
