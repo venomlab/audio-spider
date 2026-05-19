@@ -6,10 +6,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import pulsectl
 from gi.repository import GLib
 
+# Vendored pulsectl has no type stubs; aliasing through Any keeps the rest
+# of this module under mypy --strict without sprinkling type: ignores.
+from audio_spider._vendor import pulsectl as _pulsectl
 from audio_spider.errors import PABackendError
+
+pulsectl: Any = _pulsectl
 
 
 @dataclass(frozen=True)
