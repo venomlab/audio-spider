@@ -1,3 +1,11 @@
+audio-spider (1.0.0~rc1-1) UNRELEASED; urgency=medium
+
+  * Release candidate 1 for the 1.0.0 series.
+  * Vendor pulsectl under audio_spider/_vendor/ so the package installs on
+    Ubuntu 22.04 without the universe repository.
+
+ -- zibertscrem <zibertscrem@gmail.com>  Tue, 19 May 2026 23:36:00 +0300
+
 audio-spider (0.1.0-1) UNRELEASED; urgency=medium
 
   * Initial release: GTK3 flow-graph editor for PulseAudio routing.

@@ -4,7 +4,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "audio-spider"
-version = "0.1.0"
+version = "1.0.0rc1"
 description = "GTK3 flow-graph editor for PulseAudio: combine speakers into groups and route inputs to outputs visually"
 readme = "README.md"
 license = { file = "LICENSE" }
