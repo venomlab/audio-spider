@@ -12,6 +12,7 @@ a display. Encodes the rules:
 The state machine owns no graphics — it just translates pointer-input
 "hits" into intents that GraphView turns into Gtk/canvas actions.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -78,7 +79,9 @@ Intent = MoveNodeIntent | ConnectIntent | None
 
 
 _PRODUCER_PORTS = (
-    PortKind.SOURCE_OUT, PortKind.MONITOR_OUT, PortKind.COMBINE_MEMBERS,
+    PortKind.SOURCE_OUT,
+    PortKind.MONITOR_OUT,
+    PortKind.COMBINE_MEMBERS,
 )
 
 
@@ -103,12 +106,8 @@ def can_connect(model: GraphModel, src: PortHit, dst: PortHit) -> bool:
     dst_port = next((p for p in dst_node.ports if p.id == dst.port_id), None)
     if src_port is None or dst_port is None:
         return False
-    forward = (
-        src_port.kind in _PRODUCER_PORTS and dst_port.kind == PortKind.SINK_IN
-    )
-    reverse = (
-        src_port.kind == PortKind.SINK_IN and dst_port.kind in _PRODUCER_PORTS
-    )
+    forward = src_port.kind in _PRODUCER_PORTS and dst_port.kind == PortKind.SINK_IN
+    reverse = src_port.kind == PortKind.SINK_IN and dst_port.kind in _PRODUCER_PORTS
     return forward or reverse
 
 
@@ -179,8 +178,11 @@ class DragMachine:
                 # drag goes opposite to the audio flow. Flip src/dst so the
                 # emitted intent always reads producer → sink.
                 src_node = self._model.find_node(src.node_id)
+                if src_node is None:
+                    return None
                 src_port = next(
-                    (p for p in src_node.ports if p.id == src.port_id), None,
+                    (p for p in src_node.ports if p.id == src.port_id),
+                    None,
                 )
                 if src_port is not None and src_port.kind == PortKind.SINK_IN:
                     src, drop_hit = drop_hit, src

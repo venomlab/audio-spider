@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import contextlib
+from typing import TYPE_CHECKING, Any
 
 import gi
-
-gi.require_version("Gtk", "3.0")
-gi.require_version("GooCanvas", "2.0")
-
-from gi.repository import Gdk, GooCanvas, Gtk  # noqa: E402
 
 from audio_spider.drag_state import (
     ConnectIntent,
@@ -27,8 +23,15 @@ from audio_spider.node_items import (
     bezier_between,
 )
 
+gi.require_version("Gtk", "3.0")
+gi.require_version("GooCanvas", "2.0")
+
+from gi.repository import Gdk, GooCanvas, Gtk  # noqa: E402
+
 if TYPE_CHECKING:
-    from .controller import Controller
+    from collections.abc import Callable
+
+    from audio_spider.controller import Controller
 
 # Effectively unlimited workspace: canvas bounds are huge and symmetric so
 # users can drag nodes — and pan the viewport — anywhere without bumping
@@ -68,8 +71,10 @@ class GraphView(Gtk.EventBox):
         self._canvas = GooCanvas.Canvas()
         self._canvas.set_size_request(800, 600)
         self._canvas.set_bounds(
-            -CANVAS_BOUNDS_HALF, -CANVAS_BOUNDS_HALF,
-            CANVAS_BOUNDS_HALF, CANVAS_BOUNDS_HALF,
+            -CANVAS_BOUNDS_HALF,
+            -CANVAS_BOUNDS_HALF,
+            CANVAS_BOUNDS_HALF,
+            CANVAS_BOUNDS_HALF,
         )
         self._canvas.props.background_color_rgb = 0xFAFAFA
         # View transform lives on the root group rather than on the canvas
@@ -165,7 +170,10 @@ class GraphView(Gtk.EventBox):
         Everything underneath inherits the transform.
         """
         self._view_group.set_simple_transform(
-            self._view_tx, self._view_ty, self._view_scale, 0.0,
+            self._view_tx,
+            self._view_ty,
+            self._view_scale,
+            0.0,
         )
 
     def _widget_to_local(self, widget_x: float, widget_y: float) -> tuple[float, float]:
@@ -186,7 +194,8 @@ class GraphView(Gtk.EventBox):
         """Map widget pixel to canvas user coords. Used for `get_item_at`,
         which expects canvas user coords (NOT view-group local).
         """
-        return self._canvas.convert_from_pixels(widget_x, widget_y)
+        ux, uy = self._canvas.convert_from_pixels(widget_x, widget_y)
+        return float(ux), float(uy)
 
     # ------------------------------------------------------------------
     # introspection helpers (used by tests, future drag logic)
@@ -283,7 +292,7 @@ class GraphView(Gtk.EventBox):
     # ------------------------------------------------------------------
     # event handling
 
-    def _hit_for(self, target) -> Hit:
+    def _hit_for(self, target: Any) -> Hit:
         """Identify what got clicked: port, node body, edge, or blank."""
         if target is None:
             return None
@@ -295,7 +304,7 @@ class GraphView(Gtk.EventBox):
             return NodeHit(node_id=target.node_id)
         return None
 
-    def _on_press(self, _widget, event) -> bool:
+    def _on_press(self, _widget: Any, event: Any) -> bool:
         if event.button == Gdk.BUTTON_MIDDLE:
             self._begin_pan(event.x_root, event.y_root)
             return True
@@ -333,8 +342,9 @@ class GraphView(Gtk.EventBox):
             return True
         return False
 
-    def _on_motion(self, _widget, event) -> bool:
-        from .drag_state import EdgeDrag, NodeDrag
+    def _on_motion(self, _widget: Any, event: Any) -> bool:
+        from audio_spider.drag_state import EdgeDrag, NodeDrag
+
         if self._pan is not None:
             self._update_pan(event.x_root, event.y_root)
             return True
@@ -352,13 +362,13 @@ class GraphView(Gtk.EventBox):
             self._update_hover_highlight(state, ux, uy)
         return True
 
-    def _on_leave(self, _widget, _event) -> bool:
+    def _on_leave(self, _widget: Any, _event: Any) -> bool:
         self._set_hover_edge(None)
         # Keep pan running so the user can drag the canvas past the viewport
         # edge without it "letting go" mid-gesture; pan only ends on release.
         return False
 
-    def _on_release(self, _widget, event) -> bool:
+    def _on_release(self, _widget: Any, event: Any) -> bool:
         if self._pan is not None and event.button == Gdk.BUTTON_MIDDLE:
             self._end_pan()
             return True
@@ -376,14 +386,14 @@ class GraphView(Gtk.EventBox):
             if isinstance(intent, MoveNodeIntent):
                 self._controller.request_move_node(intent.node_id, intent.x, intent.y)
             elif isinstance(intent, ConnectIntent):
-                try:
+                # controller already emits 'error' signal; statusbar shows it
+                with contextlib.suppress(Exception):
                     self._controller.request_connect(
-                        intent.src_node_id, intent.src_port_id,
-                        intent.dst_node_id, intent.dst_port_id,
+                        intent.src_node_id,
+                        intent.src_port_id,
+                        intent.dst_node_id,
+                        intent.dst_port_id,
                     )
-                except Exception:
-                    # controller already emitted 'error' signal; statusbar shows it
-                    pass
             return True
         finally:
             if self._controller is not None:
@@ -398,17 +408,20 @@ class GraphView(Gtk.EventBox):
         self._pending_edge = GooCanvas.CanvasPath(
             parent=self._view_group,
             data=bezier_between(x, y, x, y),
-            **{"stroke-color": "#888888",
-               "line-width": EDGE_WIDTH,
-               "line-dash": GooCanvas.CanvasLineDash.newv([6.0, 4.0]),
-               # The drag preview line ends at the cursor — if it stayed
-               # hit-testable it would intercept get_item_at and shadow the
-               # port the user is hovering, breaking drop detection.
-               "pointer-events": GooCanvas.CanvasPointerEvents.NONE},
+            **{
+                "stroke-color": "#888888",
+                "line-width": EDGE_WIDTH,
+                "line-dash": GooCanvas.CanvasLineDash.newv([6.0, 4.0]),
+                # The drag preview line ends at the cursor — if it stayed
+                # hit-testable it would intercept get_item_at and shadow the
+                # port the user is hovering, breaking drop detection.
+                "pointer-events": GooCanvas.CanvasPointerEvents.NONE,
+            },
         )
 
     def _update_pending_edge(self, x: float, y: float) -> None:
         from .drag_state import EdgeDrag
+
         state = self._drag.state
         if not isinstance(state, EdgeDrag) or self._pending_edge is None:
             return
@@ -427,14 +440,18 @@ class GraphView(Gtk.EventBox):
         src_facing_right = True
         if src_node is not None:
             src_port = next(
-                (p for p in src_node.ports if p.id == state.src_port_id), None,
+                (p for p in src_node.ports if p.id == state.src_port_id),
+                None,
             )
             if src_port is not None and src_port.kind == PortKind.SINK_IN:
                 src_facing_right = False
         self._pending_edge.set_property(
             "data",
             bezier_between(
-                sx, sy, x, y,
+                sx,
+                sy,
+                x,
+                y,
                 src_facing_right=src_facing_right,
                 dst_facing_left=src_facing_right,
             ),
@@ -448,11 +465,12 @@ class GraphView(Gtk.EventBox):
     # ------------------------------------------------------------------
     # drop-target hover highlight
 
-    def _update_hover_highlight(self, state, x: float, y: float) -> None:
+    def _update_hover_highlight(self, state: Any, x: float, y: float) -> None:
         """Mark the port under the cursor (if compatible) as the active drop
         target so the user sees where the edge will land.
         """
-        from .drag_state import EdgeDrag
+        from audio_spider.drag_state import EdgeDrag
+
         if not isinstance(state, EdgeDrag):
             return
         target = self._canvas.get_item_at(x, y, True)
@@ -583,7 +601,7 @@ class GraphView(Gtk.EventBox):
     # ------------------------------------------------------------------
     # context menu
 
-    def _show_context_menu(self, hit: Hit, event) -> None:
+    def _show_context_menu(self, hit: Hit, event: Any) -> None:
         if self._controller is None:
             return
         menu = Gtk.Menu()
@@ -602,7 +620,8 @@ class GraphView(Gtk.EventBox):
                 item.connect(
                     "activate",
                     lambda *_: self._safe_call(
-                        self._controller.request_remove_orphan, hit.node_id,
+                        self._controller.request_remove_orphan,
+                        hit.node_id,
                     ),
                 )
                 menu.append(item)
@@ -615,7 +634,8 @@ class GraphView(Gtk.EventBox):
                     item.connect(
                         "activate",
                         lambda *_: self._safe_call(
-                            self._controller.request_delete_node, hit.node_id,
+                            self._controller.request_delete_node,
+                            hit.node_id,
                         ),
                     )
                 menu.append(item)
@@ -624,7 +644,8 @@ class GraphView(Gtk.EventBox):
             item.connect(
                 "activate",
                 lambda *_: self._safe_call(
-                    self._controller.request_delete_edge, hit.edge_id,
+                    self._controller.request_delete_edge,
+                    hit.edge_id,
                 ),
             )
             menu.append(item)
@@ -669,16 +690,18 @@ class GraphView(Gtk.EventBox):
         return True
 
     def _add_combine_member_actions(
-        self, menu: Gtk.Menu, node: Node, port: Port,
+        self,
+        menu: Gtk.Menu,
+        node: Node,
+        port: Port,
     ) -> bool:
         """Build the menu for a Speaker Group's `members` port: existing
         members get a Remove entry; a submenu lists the remaining hw sinks
         that can still be added.
         """
-        existing = [
-            e for e in self._model.edges()
-            if e.kind == "combine-member" and e.src_node == node.id
-        ]
+        controller = self._controller
+        assert controller is not None  # menu only opens when controller is set  # noqa: S101
+        existing = [e for e in self._model.edges() if e.kind == "combine-member" and e.src_node == node.id]
         appended = False
         for edge in existing:
             dst_node = self._model.find_node(edge.dst_node)
@@ -690,7 +713,9 @@ class GraphView(Gtk.EventBox):
             item.connect(
                 "activate",
                 lambda *_, c=combine_id, m=member_id: self._safe_call(
-                    self._controller.request_remove_combine_member, c, m,
+                    controller.request_remove_combine_member,
+                    c,
+                    m,
                 ),
             )
             menu.append(item)
@@ -698,10 +723,9 @@ class GraphView(Gtk.EventBox):
 
         existing_member_ids = {e.dst_node for e in existing}
         candidates = [
-            n for n in self._model.nodes()
-            if n.kind == NodeKind.HW_SINK
-            and n.id != node.id
-            and n.id not in existing_member_ids
+            n
+            for n in self._model.nodes()
+            if n.kind == NodeKind.HW_SINK and n.id != node.id and n.id not in existing_member_ids
         ]
         if candidates:
             if appended:
@@ -715,7 +739,9 @@ class GraphView(Gtk.EventBox):
                 sub_item.connect(
                     "activate",
                     lambda *_, c=combine_id, s=sink_id: self._safe_call(
-                        self._controller.request_add_combine_member, c, s,
+                        controller.request_add_combine_member,
+                        c,
+                        s,
                     ),
                 )
                 submenu.append(sub_item)
@@ -725,12 +751,15 @@ class GraphView(Gtk.EventBox):
         return appended
 
     def _add_outgoing_loopback_actions(
-        self, menu: Gtk.Menu, node: Node, port: Port,
+        self,
+        menu: Gtk.Menu,
+        node: Node,
+        port: Port,
     ) -> bool:
+        controller = self._controller
+        assert controller is not None  # menu only opens when controller is set  # noqa: S101
         existing = [
-            e for e in self._model.edges()
-            if e.kind == "loopback"
-            and e.src_node == node.id and e.src_port == port.id
+            e for e in self._model.edges() if e.kind == "loopback" and e.src_node == node.id and e.src_port == port.id
         ]
         already_connected = {(e.dst_node, e.dst_port) for e in existing}
         appended = False
@@ -740,18 +769,17 @@ class GraphView(Gtk.EventBox):
             if dst_node is None:
                 continue
             dst_port = next(
-                (p for p in dst_node.ports if p.id == edge.dst_port), None,
+                (p for p in dst_node.ports if p.id == edge.dst_port),
+                None,
             )
-            dst_label = (
-                f"{dst_node.label} :: {dst_port.label}"
-                if dst_port is not None else dst_node.label
-            )
+            dst_label = f"{dst_node.label} :: {dst_port.label}" if dst_port is not None else dst_node.label
             item = Gtk.MenuItem(label=f"Disconnect from {dst_label}")
             edge_id = edge.id  # capture by name
             item.connect(
                 "activate",
                 lambda *_, eid=edge_id: self._safe_call(
-                    self._controller.request_delete_edge, eid,
+                    controller.request_delete_edge,
+                    eid,
                 ),
             )
             menu.append(item)
@@ -759,7 +787,8 @@ class GraphView(Gtk.EventBox):
 
         # build "Connect to" submenu of compatible SINK_IN ports
         targets = self._compatible_sink_targets(
-            self_node_id=node.id, exclude=already_connected,
+            self_node_id=node.id,
+            exclude=already_connected,
         )
         if targets:
             if appended:
@@ -771,12 +800,15 @@ class GraphView(Gtk.EventBox):
                 sub_item = Gtk.MenuItem(label=label)
                 sub_item.connect(
                     "activate",
-                    lambda *_, src_n=node.id, src_p=port.id,
-                    dst_n=target_node.id, dst_p=target_port.id:
+                    lambda *_, src_n=node.id, src_p=port.id, dst_n=target_node.id, dst_p=target_port.id: (
                         self._safe_call(
-                            self._controller.request_connect,
-                            src_n, src_p, dst_n, dst_p,
-                        ),
+                            controller.request_connect,
+                            src_n,
+                            src_p,
+                            dst_n,
+                            dst_p,
+                        )
+                    ),
                 )
                 submenu.append(sub_item)
             connect_root.set_submenu(submenu)
@@ -785,12 +817,15 @@ class GraphView(Gtk.EventBox):
         return appended
 
     def _add_incoming_loopback_actions(
-        self, menu: Gtk.Menu, node: Node, port: Port,
+        self,
+        menu: Gtk.Menu,
+        node: Node,
+        port: Port,
     ) -> bool:
+        controller = self._controller
+        assert controller is not None  # menu only opens when controller is set  # noqa: S101
         existing = [
-            e for e in self._model.edges()
-            if e.kind == "loopback"
-            and e.dst_node == node.id and e.dst_port == port.id
+            e for e in self._model.edges() if e.kind == "loopback" and e.dst_node == node.id and e.dst_port == port.id
         ]
         appended = False
         for edge in existing:
@@ -798,18 +833,17 @@ class GraphView(Gtk.EventBox):
             if src_node is None:
                 continue
             src_port = next(
-                (p for p in src_node.ports if p.id == edge.src_port), None,
+                (p for p in src_node.ports if p.id == edge.src_port),
+                None,
             )
-            src_label = (
-                f"{src_node.label} :: {src_port.label}"
-                if src_port is not None else src_node.label
-            )
+            src_label = f"{src_node.label} :: {src_port.label}" if src_port is not None else src_node.label
             item = Gtk.MenuItem(label=f"Disconnect from {src_label}")
             edge_id = edge.id
             item.connect(
                 "activate",
                 lambda *_, eid=edge_id: self._safe_call(
-                    self._controller.request_delete_edge, eid,
+                    controller.request_delete_edge,
+                    eid,
                 ),
             )
             menu.append(item)
@@ -817,7 +851,10 @@ class GraphView(Gtk.EventBox):
         return appended
 
     def _compatible_sink_targets(
-        self, *, self_node_id: str, exclude: set[tuple[str, str]],
+        self,
+        *,
+        self_node_id: str,
+        exclude: set[tuple[str, str]],
     ) -> list[tuple[Node, Port]]:
         out: list[tuple[Node, Port]] = []
         for node in self._model.nodes():
@@ -832,8 +869,7 @@ class GraphView(Gtk.EventBox):
         return out
 
     @staticmethod
-    def _safe_call(fn, *args) -> None:
-        try:
+    def _safe_call(fn: Callable[..., Any], *args: Any) -> None:
+        # controller already surfaces via 'error' signal
+        with contextlib.suppress(Exception):
             fn(*args)
-        except Exception:
-            pass  # controller has already surfaced via 'error' signal

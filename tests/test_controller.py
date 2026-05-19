@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from audio_spider import config as config_module
 from audio_spider.config import Config, ConfigModule
 from audio_spider.controller import (
-    PORT_COMBINE_MEMBERS,
     PORT_MONITOR_OUT,
     PORT_SINK_IN,
     PORT_SOURCE_OUT,
@@ -15,7 +15,12 @@ from audio_spider.controller import (
 )
 from audio_spider.errors import PABackendError, ValidationError
 from audio_spider.graph_model import GraphModel, NodeKind
-from audio_spider.pa_backend import PAModule, PASink, PASource
+from audio_spider.pa_backend import PABackend, PAEvent, PAModule, PASink, PASource
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+CtrlFixture = tuple[Controller, "FakePA", GraphModel, Config, Path]
 
 
 class FakePA:
@@ -32,73 +37,98 @@ class FakePA:
         self.sinks: list[PASink] = []
         self.modules: list[PAModule] = []
         self._next_idx = 100
-        self._subscriber = None
+        self._subscriber: Callable[[PAEvent], None] | None = None
 
     # introspection
-    def list_sources(self):
+    def list_sources(self) -> list[PASource]:
         return list(self.sources)
 
-    def list_sinks(self):
+    def list_sinks(self) -> list[PASink]:
         return list(self.sinks)
 
-    def list_modules(self):
+    def list_modules(self) -> list[PAModule]:
         return list(self.modules)
 
     # mutation
     def load_null_sink(self, name: str, description: str | None = None) -> int:
         idx = self._allocate_idx()
-        self.modules.append(PAModule(
-            index=idx, name="module-null-sink",
-            argument=f"sink_name={name}",
-        ))
-        self.sinks.append(PASink(
-            name=name, index=idx + 1000,
-            description=description or name, owner_module=idx,
-        ))
-        self.sources.append(PASource(
-            name=f"{name}.monitor", index=idx + 2000,
-            description=f"Monitor of {name}",
-            is_monitor=True, monitor_of_sink=name,
-        ))
+        self.modules.append(
+            PAModule(
+                index=idx,
+                name="module-null-sink",
+                argument=f"sink_name={name}",
+            )
+        )
+        self.sinks.append(
+            PASink(
+                name=name,
+                index=idx + 1000,
+                description=description or name,
+                owner_module=idx,
+            )
+        )
+        self.sources.append(
+            PASource(
+                name=f"{name}.monitor",
+                index=idx + 2000,
+                description=f"Monitor of {name}",
+                is_monitor=True,
+                monitor_of_sink=name,
+            )
+        )
         return idx
 
-    def load_combine_sink(self, name, members, description=None) -> int:
+    def load_combine_sink(
+        self,
+        name: str,
+        members: list[str],
+        description: str | None = None,
+    ) -> int:
         idx = self._allocate_idx()
         arg = f"sink_name={name}"
         if members:
             arg += f" slaves={','.join(members)}"
-        self.modules.append(PAModule(
-            index=idx, name="module-combine-sink", argument=arg,
-        ))
-        self.sinks.append(PASink(
-            name=name, index=idx + 1000,
-            description=description or name, owner_module=idx,
-        ))
+        self.modules.append(
+            PAModule(
+                index=idx,
+                name="module-combine-sink",
+                argument=arg,
+            )
+        )
+        self.sinks.append(
+            PASink(
+                name=name,
+                index=idx + 1000,
+                description=description or name,
+                owner_module=idx,
+            )
+        )
         return idx
 
-    def load_loopback(self, source, sink, latency_msec=1) -> int:
+    def load_loopback(self, source: str, sink: str, latency_msec: int = 1) -> int:
         idx = self._allocate_idx()
-        self.modules.append(PAModule(
-            index=idx, name="module-loopback",
-            argument=f"source={source} sink={sink} latency_msec={latency_msec}",
-        ))
+        self.modules.append(
+            PAModule(
+                index=idx,
+                name="module-loopback",
+                argument=f"source={source} sink={sink} latency_msec={latency_msec}",
+            )
+        )
         return idx
 
     def unload(self, module_index: int) -> None:
         target = next((m for m in self.modules if m.index == module_index), None)
         if target is None:
-            raise PABackendError(f"unload module {module_index}: not found")
+            msg = f"unload module {module_index}: not found"
+            raise PABackendError(msg)
         self.modules.remove(target)
         # sinks owned by this module disappear
         self.sinks = [s for s in self.sinks if s.owner_module != module_index]
         # monitor sources of removed sinks disappear
         sink_names = {s.name for s in self.sinks}
-        self.sources = [
-            s for s in self.sources
-            if not s.is_monitor or s.monitor_of_sink in sink_names
-        ]
+        self.sources = [s for s in self.sources if not s.is_monitor or s.monitor_of_sink in sink_names]
 
-    def subscribe(self, callback) -> None:
+    def subscribe(self, callback: Callable[[PAEvent], None]) -> None:
         self._subscriber = callback
 
     def close(self) -> None:
@@ -111,17 +141,25 @@ class FakePA:
         return idx
 
     def add_hw_source(self, name: str, description: str = "") -> None:
-        self.sources.append(PASource(
-            name=name, index=self._allocate_idx(),
-            description=description or name,
-            is_monitor=False, monitor_of_sink=None,
-        ))
+        self.sources.append(
+            PASource(
+                name=name,
+                index=self._allocate_idx(),
+                description=description or name,
+                is_monitor=False,
+                monitor_of_sink=None,
+            )
+        )
 
     def add_hw_sink(self, name: str, description: str = "") -> None:
-        self.sinks.append(PASink(
-            name=name, index=self._allocate_idx(),
-            description=description or name, owner_module=None,
-        ))
+        self.sinks.append(
+            PASink(
+                name=name,
+                index=self._allocate_idx(),
+                description=description or name,
+                owner_module=None,
+            )
+        )
 
 
 @pytest.fixture
@@ -135,16 +173,16 @@ def fake_pa() -> FakePA:
 
 
 @pytest.fixture
-def ctrl(tmp_path: Path, fake_pa: FakePA):
+def ctrl(tmp_path: Path, fake_pa: FakePA) -> CtrlFixture:
     cfg = Config()
     cfg_path = tmp_path / "config.json"
     model = GraphModel()
-    c = Controller(fake_pa, cfg, model, config_path=cfg_path)
+    c = Controller(cast("PABackend", fake_pa), cfg, model, config_path=cfg_path)
     return c, fake_pa, model, cfg, cfg_path
 
 
-def test_initial_sync_builds_hw_nodes(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_initial_sync_builds_hw_nodes(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     nodes = {n.id: n for n in model.nodes()}
     assert "mic_a" in nodes
@@ -156,13 +194,14 @@ def test_initial_sync_builds_hw_nodes(ctrl):
     assert ".monitor" not in " ".join(nodes)
 
 
-def test_initial_sync_reconciles_config(tmp_path: Path, fake_pa: FakePA):
-    cfg = Config(modules=[
-        ConfigModule(id="vmic1", kind="null-sink",
-                     params={"name": "vmic1", "description": "Virtual Mic"}),
-    ])
+def test_initial_sync_reconciles_config(tmp_path: Path, fake_pa: FakePA) -> None:
+    cfg = Config(
+        modules=[
+            ConfigModule(id="vmic1", kind="null-sink", params={"name": "vmic1", "description": "Virtual Mic"}),
+        ]
+    )
     model = GraphModel()
-    c = Controller(fake_pa, cfg, model, config_path=tmp_path / "c.json")
+    c = Controller(cast("PABackend", fake_pa), cfg, model, config_path=tmp_path / "c.json")
     report = c.initial_sync()
     assert "vmic1" in report.created
     nodes = {n.id: n for n in model.nodes()}
@@ -174,8 +213,8 @@ def test_initial_sync_reconciles_config(tmp_path: Path, fake_pa: FakePA):
     assert PORT_MONITOR_OUT in port_kinds
 
 
-def test_request_create_null_sink_emits_node_and_saves_config(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_request_create_null_sink_emits_node_and_saves_config(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic1", "Combined Mic")
 
@@ -187,8 +226,8 @@ def test_request_create_null_sink_emits_node_and_saves_config(ctrl):
     assert any(m.id == "vmic1" and m.kind == "null-sink" for m in saved.modules)
 
 
-def test_request_connect_creates_loopback_and_edge(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_request_connect_creates_loopback_and_edge(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic1")
     c.request_connect("mic_a", PORT_SOURCE_OUT, "vmic1", PORT_SINK_IN)
@@ -202,8 +241,8 @@ def test_request_connect_creates_loopback_and_edge(ctrl):
     assert any(m.kind == "loopback" for m in saved.modules)
 
 
-def test_request_connect_via_monitor_resolves_pa_source(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_request_connect_via_monitor_resolves_pa_source(ctrl: CtrlFixture) -> None:
+    c, pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic1")
     c.request_create_null_sink("vmic2")
@@ -213,8 +252,8 @@ def test_request_connect_via_monitor_resolves_pa_source(ctrl):
     assert "source=vmic1.monitor" in lb.argument
 
 
-def test_request_connect_rejects_incompatible_ports(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_request_connect_rejects_incompatible_ports(ctrl: CtrlFixture) -> None:
+    c, _pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic1")
     # SINK_IN → SOURCE_OUT is wrong direction
@@ -222,12 +261,12 @@ def test_request_connect_rejects_incompatible_ports(ctrl):
         c.request_connect("vmic1", PORT_SINK_IN, "mic_a", PORT_SOURCE_OUT)
 
 
-def test_request_delete_edge_unloads_loopback(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_request_delete_edge_unloads_loopback(ctrl: CtrlFixture) -> None:
+    c, pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic1")
     c.request_connect("mic_a", PORT_SOURCE_OUT, "vmic1", PORT_SINK_IN)
-    edge = list(model.edges())[0]
+    edge = next(iter(model.edges()))
     c.request_delete_edge(edge.id)
     assert model.edges() == []
     assert not any(m.name == "module-loopback" for m in pa.list_modules())
@@ -235,8 +274,8 @@ def test_request_delete_edge_unloads_loopback(ctrl):
     assert not any(m.kind == "loopback" for m in saved.modules)
 
 
-def test_request_delete_node_refuses_hardware(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_request_delete_node_refuses_hardware(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     errors: list[str] = []
     c.connect("error", lambda _src, msg: errors.append(msg))
@@ -245,8 +284,8 @@ def test_request_delete_node_refuses_hardware(ctrl):
     assert model.find_node("mic_a") is not None
 
 
-def test_request_delete_node_unloads_virtual_sink(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_request_delete_node_unloads_virtual_sink(ctrl: CtrlFixture) -> None:
+    c, pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic1")
     c.request_delete_node("vmic1")
@@ -256,10 +295,10 @@ def test_request_delete_node_unloads_virtual_sink(ctrl):
     assert not any(m.kind == "null-sink" for m in saved.modules)
 
 
-def test_delete_null_sink_cascades_incoming_loopbacks(ctrl):
+def test_delete_null_sink_cascades_incoming_loopbacks(ctrl: CtrlFixture) -> None:
     """Deleting a null-sink must also unload every mic→sink loopback,
     not leave them as orphans."""
-    c, pa, model, cfg, cfg_path = ctrl
+    c, pa, model, _cfg, _cfg_path = ctrl
     c.initial_sync()
     c.request_create_null_sink("vsink1")
     c.request_connect("mic_a", "out", "vsink1", "in")
@@ -273,15 +312,13 @@ def test_delete_null_sink_cascades_incoming_loopbacks(ctrl):
     assert not any(m.name == "module-loopback" for m in pa.list_modules())
     assert not any(m.name == "module-null-sink" for m in pa.list_modules())
     # placeholder MUST NOT appear — no orphan loopbacks survive
-    assert not any(
-        n.kind.value == "missing" for n in model.nodes()
-    )
+    assert not any(n.kind.value == "missing" for n in model.nodes())
 
 
-def test_delete_null_sink_cascades_outgoing_monitor_loopbacks(ctrl):
+def test_delete_null_sink_cascades_outgoing_monitor_loopbacks(ctrl: CtrlFixture) -> None:
     """A loopback from sink.monitor → another sink must also be unloaded when
     the source sink is deleted."""
-    c, pa, model, cfg, _ = ctrl
+    c, pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_null_sink("vsink1")
     c.request_create_null_sink("vsink2")
@@ -296,9 +333,9 @@ def test_delete_null_sink_cascades_outgoing_monitor_loopbacks(ctrl):
     assert model.find_node("vsink2") is not None
 
 
-def test_delete_speaker_group_does_not_leave_orphan(ctrl):
+def test_delete_speaker_group_does_not_leave_orphan(ctrl: CtrlFixture) -> None:
     """Combine-sink + a loopback into it → deleting the group cleans up both."""
-    c, pa, model, cfg, _ = ctrl
+    c, pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout", ["speakers"], description="Group")
     c.request_connect("mic_a", "out", "vout", "in")
@@ -311,31 +348,34 @@ def test_delete_speaker_group_does_not_leave_orphan(ctrl):
     assert not any(n.kind.value == "missing" for n in model.nodes())
 
 
-def test_request_move_node_persists_layout(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_request_move_node_persists_layout(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_move_node("mic_a", 123.0, 456.0)
     node = model.find_node("mic_a")
-    assert node.x == 123.0 and node.y == 456.0
+    assert node is not None
+    assert node.x == 123.0
+    assert node.y == 456.0
     saved = config_module.load(cfg_path)
     assert saved.layout["mic_a"] == {"x": 123.0, "y": 456.0}
 
 
-def test_saved_layout_is_restored_on_next_sync(ctrl, tmp_path: Path):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_saved_layout_is_restored_on_next_sync(ctrl: CtrlFixture, tmp_path: Path) -> None:
+    c, pa, _model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_move_node("mic_a", 999.0, 111.0)
     # second controller reading the persisted config
     cfg2 = config_module.load(cfg_path)
     model2 = GraphModel()
-    c2 = Controller(pa, cfg2, model2, config_path=cfg_path)
+    c2 = Controller(cast("PABackend", pa), cfg2, model2, config_path=cfg_path)
     c2.initial_sync()
     node = model2.find_node("mic_a")
+    assert node is not None
     assert (node.x, node.y) == (999.0, 111.0)
 
 
-def test_combine_member_edge_is_rendered(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_combine_member_edge_is_rendered(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout", ["speakers", "headphones"])
     edges = list(model.edges())
@@ -343,22 +383,21 @@ def test_combine_member_edge_is_rendered(ctrl):
     assert members == {("vout", "speakers"), ("vout", "headphones")}
 
 
-def test_create_combine_sink_empty(ctrl):
+def test_create_combine_sink_empty(ctrl: CtrlFixture) -> None:
     """Speaker group can be created with no members and added to later."""
-    c, pa, model, cfg, cfg_path = ctrl
+    c, _pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout", description="Group")
     node = model.find_node("vout")
     assert node is not None
-    assert not any(e.kind == "combine-member" and e.src_node == "vout"
-                   for e in model.edges())
+    assert not any(e.kind == "combine-member" and e.src_node == "vout" for e in model.edges())
     saved = config_module.load(cfg_path)
     combine_cfg = next(m for m in saved.modules if m.id == "vout")
     assert combine_cfg.params.get("members", []) == []
 
 
-def test_add_combine_member_extends_slaves(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_add_combine_member_extends_slaves(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout")
     c.request_add_combine_member("vout", "speakers")
@@ -371,8 +410,8 @@ def test_add_combine_member_extends_slaves(ctrl):
     assert combine_cfg.params["members"] == ["speakers"]
 
 
-def test_add_combine_member_is_idempotent(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_add_combine_member_is_idempotent(ctrl: CtrlFixture) -> None:
+    c, pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout", ["speakers"])
     pre_modules = list(pa.list_modules())
@@ -385,17 +424,18 @@ def test_add_combine_member_is_idempotent(ctrl):
     assert len(post_modules) == len(pre_modules)
 
 
-def test_add_combine_member_rejects_self(ctrl):
+def test_add_combine_member_rejects_self(ctrl: CtrlFixture) -> None:
     from audio_spider.errors import ValidationError
-    c, pa, model, cfg, _ = ctrl
+
+    c, _pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout")
     with pytest.raises(ValidationError):
         c.request_add_combine_member("vout", "vout")
 
 
-def test_remove_combine_member_keeps_empty_combine(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_remove_combine_member_keeps_empty_combine(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout", ["speakers"])
     c.request_remove_combine_member("vout", "speakers")
@@ -407,8 +447,8 @@ def test_remove_combine_member_keeps_empty_combine(ctrl):
     assert combine_cfg.params["members"] == []
 
 
-def test_remove_combine_member_noop_for_unknown(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_remove_combine_member_noop_for_unknown(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout", ["speakers"])
     c.request_remove_combine_member("vout", "headphones")
@@ -416,9 +456,9 @@ def test_remove_combine_member_noop_for_unknown(ctrl):
     assert members == ["speakers"]
 
 
-def test_request_connect_from_combine_members_adds_member(ctrl):
+def test_request_connect_from_combine_members_adds_member(ctrl: CtrlFixture) -> None:
     """Dragging from a combine's `members` port → speaker.in must add member."""
-    c, pa, model, cfg, _ = ctrl
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout")
     c.request_connect("vout", "members", "speakers", "in")
@@ -426,135 +466,157 @@ def test_request_connect_from_combine_members_adds_member(ctrl):
     assert "speakers" in members
 
 
-def test_combine_member_edge_delete_removes_only_that_member(ctrl):
+def test_combine_member_edge_delete_removes_only_that_member(ctrl: CtrlFixture) -> None:
     """Right-click → delete on a combine-member edge unloads & reloads the
     combine-sink without that single member."""
-    c, pa, model, cfg, _ = ctrl
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink(
-        "vout", ["speakers", "headphones"], description="Group",
+        "vout",
+        ["speakers", "headphones"],
+        description="Group",
     )
-    edge = next(
-        e for e in model.edges()
-        if e.kind == "combine-member" and e.dst_node == "headphones"
-    )
+    edge = next(e for e in model.edges() if e.kind == "combine-member" and e.dst_node == "headphones")
     c.request_delete_edge(edge.id)
-    remaining_members = {
-        e.dst_node for e in model.edges() if e.kind == "combine-member"
-    }
+    remaining_members = {e.dst_node for e in model.edges() if e.kind == "combine-member"}
     assert remaining_members == {"speakers"}
 
 
-def test_reload_config_picks_up_external_edits(ctrl):
-    c, pa, model, cfg, cfg_path = ctrl
+def test_reload_config_picks_up_external_edits(ctrl: CtrlFixture) -> None:
+    c, _pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     # write a config with a null-sink directly to disk, as if user edited it
     import json
-    cfg_path.write_text(json.dumps({
-        "version": 1,
-        "modules": [
-            {"id": "vmic_external", "kind": "null-sink",
-             "params": {"name": "vmic_external"}},
-        ],
-        "layout": {},
-        "window": {"w": 1200, "h": 800, "start_minimized": False},
-    }))
+
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "modules": [
+                    {"id": "vmic_external", "kind": "null-sink", "params": {"name": "vmic_external"}},
+                ],
+                "layout": {},
+                "window": {"w": 1200, "h": 800, "start_minimized": False},
+            }
+        )
+    )
     report = c.reload_config()
     assert "vmic_external" in report.created
     assert model.find_node("vmic_external") is not None
 
 
-def test_reload_config_leaves_existing_modules_alone(ctrl):
+def test_reload_config_leaves_existing_modules_alone(ctrl: CtrlFixture) -> None:
     """Modules in PA but absent from the new config must remain loaded."""
-    c, pa, model, cfg, cfg_path = ctrl
+    c, pa, model, _cfg, cfg_path = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic_pre")
     # now wipe the config (still has vmic_pre on disk from previous request;
     # overwrite it with an empty one)
     import json
-    cfg_path.write_text(json.dumps({
-        "version": 1, "modules": [], "layout": {},
-        "window": {"w": 1200, "h": 800, "start_minimized": False},
-    }))
+
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "modules": [],
+                "layout": {},
+                "window": {"w": 1200, "h": 800, "start_minimized": False},
+            }
+        )
+    )
     c.reload_config()
     # vmic_pre still loaded in PA and visible as a node
     assert any(s.name == "vmic_pre" for s in pa.list_sinks())
     assert model.find_node("vmic_pre") is not None
 
 
-def test_null_sink_lands_in_null_sink_column(ctrl):
+def test_null_sink_lands_in_null_sink_column(ctrl: CtrlFixture) -> None:
     """Newly-created null-sinks sit left of center."""
     from audio_spider.controller import (
-        AUTO_LAYOUT_COL_HW_SOURCE,
-        AUTO_LAYOUT_COL_NULL_SINK,
         AUTO_LAYOUT_COL_COMBINE_SINK,
         AUTO_LAYOUT_COL_HW_SINK,
+        AUTO_LAYOUT_COL_HW_SOURCE,
+        AUTO_LAYOUT_COL_NULL_SINK,
     )
-    c, pa, model, cfg, _ = ctrl
+
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_null_sink("vsink1", "My Null Sink")
     node = model.find_node("vsink1")
-    # ordering: hw_source < null_sink < combine_sink < hw_sink
+    assert node is not None
+    # ordering left-to-right: hw_source, null_sink, combine_sink, hw_sink
     assert AUTO_LAYOUT_COL_HW_SOURCE < AUTO_LAYOUT_COL_NULL_SINK
     assert AUTO_LAYOUT_COL_NULL_SINK < AUTO_LAYOUT_COL_COMBINE_SINK
     assert AUTO_LAYOUT_COL_COMBINE_SINK < AUTO_LAYOUT_COL_HW_SINK
     assert node.x == AUTO_LAYOUT_COL_NULL_SINK
 
 
-def test_combine_sink_lands_in_speaker_group_column(ctrl):
+def test_combine_sink_lands_in_speaker_group_column(ctrl: CtrlFixture) -> None:
     from audio_spider.controller import AUTO_LAYOUT_COL_COMBINE_SINK
-    c, pa, model, cfg, _ = ctrl
+
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_combine_sink("vout1", ["speakers"], description="Group A")
     node = model.find_node("vout1")
+    assert node is not None
     assert node.x == AUTO_LAYOUT_COL_COMBINE_SINK
 
 
-def test_hw_sink_exposes_monitor_port(ctrl):
+def test_hw_sink_exposes_monitor_port(ctrl: CtrlFixture) -> None:
     """Every sink (incl. hardware) must show a monitor-out port so that
     loopbacks originating from sink.monitor are renderable."""
     from audio_spider.graph_model import PortKind
-    c, pa, model, cfg, _ = ctrl
+
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     speakers = model.find_node("speakers")
+    assert speakers is not None
     port_kinds = {p.kind for p in speakers.ports}
     assert PortKind.SINK_IN in port_kinds
     assert PortKind.MONITOR_OUT in port_kinds
 
 
-def test_existing_loopback_from_hw_sink_monitor_renders(ctrl, fake_pa):
+def test_existing_loopback_from_hw_sink_monitor_renders(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     """A loopback created by pactl (outside our app) from speakers.monitor
     must show up as an edge once we sync."""
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=4242, name="module-loopback",
-        argument="source=speakers.monitor sink=headphones",
-    ))
-    c, pa, model, cfg, _ = ctrl
+
+    fake_pa.modules.append(
+        PAModule(
+            index=4242,
+            name="module-loopback",
+            argument="source=speakers.monitor sink=headphones",
+        )
+    )
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     matches = [
-        e for e in model.edges()
+        e
+        for e in model.edges()
         if e.kind == "loopback"
-        and e.src_node == "speakers" and e.src_port == "monitor"
-        and e.dst_node == "headphones" and e.dst_port == "in"
+        and e.src_node == "speakers"
+        and e.src_port == "monitor"
+        and e.dst_node == "headphones"
+        and e.dst_port == "in"
     ]
     assert len(matches) == 1, list(model.edges())
 
 
-def test_existing_loopback_can_be_deleted_via_controller(ctrl, fake_pa):
+def test_existing_loopback_can_be_deleted_via_controller(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     """Pre-existing loopbacks become edges with a backing module index — so
     request_delete_edge can unload them, same as edges we created."""
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=4242, name="module-loopback",
-        argument="source=mic_a sink=speakers",
-    ))
-    c, pa, model, cfg, _ = ctrl
-    c.initial_sync()
-    edge = next(
-        e for e in model.edges()
-        if e.kind == "loopback" and e.src_node == "mic_a" and e.dst_node == "speakers"
+
+    fake_pa.modules.append(
+        PAModule(
+            index=4242,
+            name="module-loopback",
+            argument="source=mic_a sink=speakers",
+        )
     )
+    c, pa, model, _cfg, _ = ctrl
+    c.initial_sync()
+    edge = next(e for e in model.edges() if e.kind == "loopback" and e.src_node == "mic_a" and e.dst_node == "speakers")
     assert edge.pa_module_index == 4242
     c.request_delete_edge(edge.id)
     # underlying PA module gone
@@ -563,27 +625,32 @@ def test_existing_loopback_can_be_deleted_via_controller(ctrl, fake_pa):
     assert not any(e.id == edge.id for e in model.edges())
 
 
-def test_request_create_null_sink_persists_description(ctrl):
+def test_request_create_null_sink_persists_description(ctrl: CtrlFixture) -> None:
     """Description (friendly name) must reach PA, not be dropped."""
-    c, pa, model, cfg, _ = ctrl
+    c, pa, model, _cfg, _ = ctrl
     c.initial_sync()
     c.request_create_null_sink("vmic1", description="My Virtual Mic")
     sink = next(s for s in pa.list_sinks() if s.name == "vmic1")
     assert sink.description == "My Virtual Mic"
     node = model.find_node("vmic1")
+    assert node is not None
     assert node.label == "My Virtual Mic"
 
 
-def test_orphan_loopback_creates_placeholder_node(ctrl, fake_pa):
+def test_orphan_loopback_creates_placeholder_node(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     """A loopback whose sink no longer exists must still render — as a
     placeholder node so the user can see and remove the stray module."""
     from audio_spider.graph_model import NodeKind
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=4242, name="module-loopback",
-        argument="source=mic_a sink=GhostSink latency_msec=1",
-    ))
-    c, pa, model, cfg, _ = ctrl
+
+    fake_pa.modules.append(
+        PAModule(
+            index=4242,
+            name="module-loopback",
+            argument="source=mic_a sink=GhostSink latency_msec=1",
+        )
+    )
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     ghost = model.find_node("GhostSink")
     assert ghost is not None
@@ -591,32 +658,36 @@ def test_orphan_loopback_creates_placeholder_node(ctrl, fake_pa):
     assert "missing" in ghost.label.lower()
 
 
-def test_orphan_loopback_edge_renders(ctrl, fake_pa):
+def test_orphan_loopback_edge_renders(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     """The edge from the real source to the missing sink must show up."""
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=4242, name="module-loopback",
-        argument="source=mic_a sink=GhostSink",
-    ))
-    c, pa, model, cfg, _ = ctrl
+
+    fake_pa.modules.append(
+        PAModule(
+            index=4242,
+            name="module-loopback",
+            argument="source=mic_a sink=GhostSink",
+        )
+    )
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
-    edges = [
-        e for e in model.edges()
-        if e.src_node == "mic_a" and e.dst_node == "GhostSink"
-        and e.kind == "loopback"
-    ]
+    edges = [e for e in model.edges() if e.src_node == "mic_a" and e.dst_node == "GhostSink" and e.kind == "loopback"]
     assert len(edges) == 1
     assert edges[0].pa_module_index == 4242
 
 
-def test_orphan_loopback_can_be_deleted_via_edge(ctrl, fake_pa):
+def test_orphan_loopback_can_be_deleted_via_edge(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     """Right-click on the edge → delete should still work for orphan edges."""
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=4242, name="module-loopback",
-        argument="source=mic_a sink=GhostSink",
-    ))
-    c, pa, model, cfg, _ = ctrl
+
+    fake_pa.modules.append(
+        PAModule(
+            index=4242,
+            name="module-loopback",
+            argument="source=mic_a sink=GhostSink",
+        )
+    )
+    c, pa, model, _cfg, _ = ctrl
     c.initial_sync()
     edge = next(e for e in model.edges() if e.dst_node == "GhostSink")
     c.request_delete_edge(edge.id)
@@ -625,17 +696,24 @@ def test_orphan_loopback_can_be_deleted_via_edge(ctrl, fake_pa):
     assert model.find_node("GhostSink") is None
 
 
-def test_request_remove_orphan_unloads_all_referencing_loopbacks(ctrl, fake_pa):
+def test_request_remove_orphan_unloads_all_referencing_loopbacks(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=1, name="module-loopback",
-        argument="source=mic_a sink=GhostSink",
-    ))
-    fake_pa.modules.append(PAModule(
-        index=2, name="module-loopback",
-        argument="source=mic_b sink=GhostSink",
-    ))
-    c, pa, model, cfg, _ = ctrl
+
+    fake_pa.modules.append(
+        PAModule(
+            index=1,
+            name="module-loopback",
+            argument="source=mic_a sink=GhostSink",
+        )
+    )
+    fake_pa.modules.append(
+        PAModule(
+            index=2,
+            name="module-loopback",
+            argument="source=mic_b sink=GhostSink",
+        )
+    )
+    c, pa, model, _cfg, _ = ctrl
     c.initial_sync()
     assert model.find_node("GhostSink") is not None
 
@@ -645,14 +723,18 @@ def test_request_remove_orphan_unloads_all_referencing_loopbacks(ctrl, fake_pa):
     assert model.find_node("GhostSink") is None
 
 
-def test_request_remove_orphan_ignores_non_missing_nodes(ctrl, fake_pa):
+def test_request_remove_orphan_ignores_non_missing_nodes(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     """Calling remove_orphan on a real node must not unload anything."""
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=1, name="module-loopback",
-        argument="source=mic_a sink=speakers",
-    ))
-    c, pa, model, cfg, _ = ctrl
+
+    fake_pa.modules.append(
+        PAModule(
+            index=1,
+            name="module-loopback",
+            argument="source=mic_a sink=speakers",
+        )
+    )
+    c, pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     before = {m.index for m in pa.list_modules()}
     c.request_remove_orphan("speakers")
@@ -660,68 +742,79 @@ def test_request_remove_orphan_ignores_non_missing_nodes(ctrl, fake_pa):
     assert before == after
 
 
-def test_orphan_node_placement_in_virtual_column(ctrl, fake_pa):
+def test_orphan_node_placement_in_virtual_column(ctrl: CtrlFixture, fake_pa: FakePA) -> None:
     from audio_spider.controller import AUTO_LAYOUT_COL_NULL_SINK
     from audio_spider.pa_backend import PAModule
-    fake_pa.modules.append(PAModule(
-        index=4242, name="module-loopback",
-        argument="source=mic_a sink=GhostSink",
-    ))
-    c, pa, model, cfg, _ = ctrl
+
+    fake_pa.modules.append(
+        PAModule(
+            index=4242,
+            name="module-loopback",
+            argument="source=mic_a sink=GhostSink",
+        )
+    )
+    c, _pa, model, _cfg, _ = ctrl
     c.initial_sync()
     ghost = model.find_node("GhostSink")
+    assert ghost is not None
     assert ghost.x == AUTO_LAYOUT_COL_NULL_SINK
 
 
-def test_pa_change_events_do_not_rebuild_model(ctrl):
+def test_pa_change_events_do_not_rebuild_model(ctrl: CtrlFixture) -> None:
     """Volume tweaks and other 'change' events must not wipe the dragged node."""
     from audio_spider.pa_backend import PAEvent
-    c, pa, model, cfg, _ = ctrl
+
+    c, _pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     rebuild_count = 0
     original = c.rebuild_model
 
-    def counting_rebuild():
+    def counting_rebuild() -> None:
         nonlocal rebuild_count
         rebuild_count += 1
         original()
-    c.rebuild_model = counting_rebuild
+
+    c.rebuild_model = counting_rebuild  # type: ignore[method-assign]
 
     c._on_pa_event(PAEvent(facility="sink", type="change", index=1))
     c._on_pa_event(PAEvent(facility="source", type="change", index=2))
     assert rebuild_count == 0
 
 
-def test_pa_new_event_triggers_rebuild(ctrl):
+def test_pa_new_event_triggers_rebuild(ctrl: CtrlFixture) -> None:
     from audio_spider.pa_backend import PAEvent
-    c, pa, model, cfg, _ = ctrl
+
+    c, _pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     rebuild_count = 0
     original = c.rebuild_model
 
-    def counting_rebuild():
+    def counting_rebuild() -> None:
         nonlocal rebuild_count
         rebuild_count += 1
         original()
-    c.rebuild_model = counting_rebuild
+
+    c.rebuild_model = counting_rebuild  # type: ignore[method-assign]
 
     c._on_pa_event(PAEvent(facility="module", type="new", index=99))
     assert rebuild_count == 1
 
 
-def test_pause_rebuild_defers_pa_event(ctrl):
+def test_pause_rebuild_defers_pa_event(ctrl: CtrlFixture) -> None:
     """Events during a drag should be deferred, not snap-back the node."""
     from audio_spider.pa_backend import PAEvent
-    c, pa, model, cfg, _ = ctrl
+
+    c, _pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     rebuild_count = 0
     original = c.rebuild_model
 
-    def counting_rebuild():
+    def counting_rebuild() -> None:
         nonlocal rebuild_count
         rebuild_count += 1
         original()
-    c.rebuild_model = counting_rebuild
+
+    c.rebuild_model = counting_rebuild  # type: ignore[method-assign]
 
     c.pause_rebuild()
     c._on_pa_event(PAEvent(facility="module", type="new", index=99))
@@ -731,28 +824,30 @@ def test_pause_rebuild_defers_pa_event(ctrl):
     assert rebuild_count == 1  # one coalesced rebuild on resume
 
 
-def test_pause_rebuild_skips_resume_when_no_events(ctrl):
-    c, pa, model, cfg, _ = ctrl
+def test_pause_rebuild_skips_resume_when_no_events(ctrl: CtrlFixture) -> None:
+    c, _pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     rebuild_count = 0
     original = c.rebuild_model
 
-    def counting_rebuild():
+    def counting_rebuild() -> None:
         nonlocal rebuild_count
         rebuild_count += 1
         original()
-    c.rebuild_model = counting_rebuild
+
+    c.rebuild_model = counting_rebuild  # type: ignore[method-assign]
 
     c.pause_rebuild()
     c.resume_rebuild()
     assert rebuild_count == 0
 
 
-def test_error_signal_emitted_on_pa_failure(ctrl, monkeypatch):
-    c, pa, model, cfg, _ = ctrl
+def test_error_signal_emitted_on_pa_failure(ctrl: CtrlFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, pa, _model, _cfg, _ = ctrl
     c.initial_sync()
     monkeypatch.setattr(
-        pa, "load_null_sink",
+        pa,
+        "load_null_sink",
         lambda *a, **kw: (_ for _ in ()).throw(PABackendError("nope")),
     )
     errors: list[str] = []

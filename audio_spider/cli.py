@@ -17,18 +17,17 @@ log = logging.getLogger("audio_spider")
 
 
 @click.command()
-@click.option("--headless", is_flag=True,
-              help="Apply config and exit (for autostart/systemd-user).")
-@click.option("--no-tray", is_flag=True,
-              help="Quit on window close instead of hiding to tray.")
-@click.option("--minimized", is_flag=True,
-              help="Start minimized to tray.")
-@click.option("--config", "config_path",
-              type=click.Path(path_type=Path, dir_okay=False),
-              default=None,
-              help="Override config path (default: $XDG_CONFIG_HOME/audio_spider/config.json).")
-@click.option("-v", "--verbose", count=True,
-              help="Increase log verbosity (-v info, -vv debug).")
+@click.option("--headless", is_flag=True, help="Apply config and exit (for autostart/systemd-user).")
+@click.option("--no-tray", is_flag=True, help="Quit on window close instead of hiding to tray.")
+@click.option("--minimized", is_flag=True, help="Start minimized to tray.")
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(path_type=Path, dir_okay=False),  # type: ignore[type-var]
+    default=None,
+    help="Override config path (default: $XDG_CONFIG_HOME/audio_spider/config.json).",
+)
+@click.option("-v", "--verbose", count=True, help="Increase log verbosity (-v info, -vv debug).")
 def main(
     headless: bool,
     no_tray: bool,
@@ -62,7 +61,8 @@ def main(
         controller = Controller(pa, cfg, model, config_path=config_path)
         report = controller.initial_sync()
         _log_report(report)
-        from .app import run_gui
+        from audio_spider.app import run_gui
+
         rc = run_gui(controller, model, cfg, no_tray=no_tray, minimized=minimized)
         # persist final window size on clean exit
         try:
@@ -94,5 +94,3 @@ def _log_report(report: ReconcileReport) -> None:
         log.info("already present: %s (module #%d)", cm_id, idx)
     for cm_id, err in report.errors.items():
         log.error("failed %s: %s", cm_id, err)
-
-

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
-
-from typing import TYPE_CHECKING
 
 from gi.repository import AyatanaAppIndicator3 as AppIndicator  # noqa: E402
 from gi.repository import Gtk  # noqa: E402
@@ -33,7 +33,9 @@ class TrayIcon:
         self._on_reload = on_reload
         self._on_quit = on_quit
         self._indicator = AppIndicator.Indicator.new(
-            app_id, icon_name, AppIndicator.IndicatorCategory.APPLICATION_STATUS,
+            app_id,
+            icon_name,
+            AppIndicator.IndicatorCategory.APPLICATION_STATUS,
         )
         self._indicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         self._indicator.set_title("Audio Spider")

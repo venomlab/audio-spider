@@ -127,13 +127,15 @@ class PABackend:
         result: list[PASource] = []
         for s in raws:
             monitor_name = getattr(s, "monitor_of_sink_name", None)
-            result.append(PASource(
-                name=s.name,
-                index=s.index,
-                description=s.description or s.name,
-                is_monitor=bool(monitor_name),
-                monitor_of_sink=monitor_name or None,
-            ))
+            result.append(
+                PASource(
+                    name=s.name,
+                    index=s.index,
+                    description=s.description or s.name,
+                    is_monitor=bool(monitor_name),
+                    monitor_of_sink=monitor_name or None,
+                )
+            )
         return result
 
     def list_sinks(self) -> list[PASink]:
@@ -146,12 +148,14 @@ class PABackend:
         result: list[PASink] = []
         for s in raws:
             owner = s.owner_module if s.owner_module >= 0 else None
-            result.append(PASink(
-                name=s.name,
-                index=s.index,
-                description=s.description or s.name,
-                owner_module=owner,
-            ))
+            result.append(
+                PASink(
+                    name=s.name,
+                    index=s.index,
+                    description=s.description or s.name,
+                    owner_module=owner,
+                )
+            )
         return result
 
     def list_modules(self) -> list[PAModule]:
@@ -161,10 +165,7 @@ class PABackend:
             except pulsectl.PulseError as e:
                 msg = f"module_list failed: {e}"
                 raise PABackendError(msg) from e
-        return [
-            PAModule(index=m.index, name=m.name, argument=m.argument or "")
-            for m in raws
-        ]
+        return [PAModule(index=m.index, name=m.name, argument=m.argument or "") for m in raws]
 
     def load_null_sink(self, name: str, description: str | None = None) -> int:
         params: dict[str, Any] = {"sink_name": name}
@@ -238,7 +239,9 @@ class PABackend:
         self._stop_event.clear()
         self._ready_event.clear()
         self._event_thread = threading.Thread(
-            target=self._event_loop, name="pa-events", daemon=True,
+            target=self._event_loop,
+            name="pa-events",
+            daemon=True,
         )
         self._event_thread.start()
         if not self._ready_event.wait(timeout):
@@ -250,7 +253,7 @@ class PABackend:
             self._event_pulse = pulsectl.Pulse(self._client_name + "-events")
             self._event_pulse.event_mask_set("sink", "source", "module")
             self._event_pulse.event_callback_set(self._on_pa_event)
-        except Exception:
+        except Exception:  # noqa: BLE001
             self._ready_event.set()
             return
         self._ready_event.set()

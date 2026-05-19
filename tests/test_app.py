@@ -4,32 +4,45 @@ These need a working display (or Xvfb). The fixture auto-skips when GTK
 init fails, so a CI box without one just won't run them. On the dev box
 we can also force-skip by setting AUDIO_SPIDER_SKIP_GUI=1.
 """
+
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-pytestmark = pytest.mark.gtk
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from audio_spider.config import Config
+    from audio_spider.controller import Controller
+    from audio_spider.graph_model import GraphModel
+    from audio_spider.pa_backend import PABackend
+
+HeadlessCtrl = tuple["Controller", "GraphModel", "Config"]
+
+pytestmark = [pytest.mark.gtk, pytest.mark.usefixtures("_gtk")]
 
 
 @pytest.fixture(scope="module")
-def _gtk():
+def _gtk() -> Any:
     if os.environ.get("AUDIO_SPIDER_SKIP_GUI"):
         pytest.skip("AUDIO_SPIDER_SKIP_GUI set")
     if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
         pytest.skip("no display available")
     import gi
+
     gi.require_version("Gtk", "3.0")
     from gi.repository import Gtk
+
     if not Gtk.init_check():
         pytest.skip("Gtk.init_check() failed")
     return Gtk
 
 
 @pytest.fixture
-def headless_ctrl(tmp_path: Path):
+def headless_ctrl(tmp_path: Path) -> HeadlessCtrl:
     """Set up Controller backed by FakePA for GUI tests."""
     from audio_spider.config import Config
     from audio_spider.controller import Controller
@@ -41,12 +54,17 @@ def headless_ctrl(tmp_path: Path):
     pa.add_hw_sink("speakers", "Speakers")
     cfg = Config()
     model = GraphModel()
-    c = Controller(pa, cfg, model, config_path=tmp_path / "config.json")
+    c = Controller(
+        cast("PABackend", pa),
+        cfg,
+        model,
+        config_path=tmp_path / "config.json",
+    )
     c.initial_sync()
     return c, model, cfg
 
 
-def test_main_window_constructs(_gtk, headless_ctrl):
+def test_main_window_constructs(headless_ctrl: HeadlessCtrl) -> None:
     from audio_spider.app import AudioSpiderApp, MainWindow
 
     controller, model, cfg = headless_ctrl
@@ -57,16 +75,17 @@ def test_main_window_constructs(_gtk, headless_ctrl):
     win.destroy()
 
 
-def test_main_window_toolbar_has_three_actions(_gtk, headless_ctrl):
-    from audio_spider.app import AudioSpiderApp, MainWindow
+def test_main_window_toolbar_has_three_actions(headless_ctrl: HeadlessCtrl) -> None:
     from gi.repository import Gtk
+
+    from audio_spider.app import AudioSpiderApp, MainWindow
 
     controller, model, cfg = headless_ctrl
     app = AudioSpiderApp(controller, model, cfg, use_tray=False, start_minimized=False)
     win = MainWindow(app, controller, model, cfg, use_tray=False)
 
     # crawl children to find the toolbar
-    def _find_toolbar(widget) -> Gtk.Toolbar | None:
+    def _find_toolbar(widget: Any) -> Gtk.Toolbar | None:
         if isinstance(widget, Gtk.Toolbar):
             return widget
         if isinstance(widget, Gtk.Container):
@@ -85,23 +104,28 @@ def test_main_window_toolbar_has_three_actions(_gtk, headless_ctrl):
     ]
     labels = {b.get_label() for b in tool_buttons}
     assert {
-        "Speaker Group", "Reload config",
-        "Reset view", "Center view",
-        "Zoom in", "Zoom out", "Reset zoom",
+        "Speaker Group",
+        "Reload config",
+        "Reset view",
+        "Center view",
+        "Zoom in",
+        "Zoom out",
+        "Reset zoom",
         "Exit",
     } <= labels
     win.destroy()
 
 
-def test_controller_error_signal_updates_statusbar(_gtk, headless_ctrl):
-    from audio_spider.app import AudioSpiderApp, MainWindow
+def test_controller_error_signal_updates_statusbar(headless_ctrl: HeadlessCtrl) -> None:
     from gi.repository import Gtk
+
+    from audio_spider.app import AudioSpiderApp, MainWindow
 
     controller, model, cfg = headless_ctrl
     app = AudioSpiderApp(controller, model, cfg, use_tray=False, start_minimized=False)
     win = MainWindow(app, controller, model, cfg, use_tray=False)
 
-    def _find_statusbar(w):
+    def _find_statusbar(w: Any) -> Any:
         if isinstance(w, Gtk.Statusbar):
             return w
         if isinstance(w, Gtk.Container):
@@ -123,9 +147,10 @@ def test_controller_error_signal_updates_statusbar(_gtk, headless_ctrl):
     win.destroy()
 
 
-def test_delete_event_hides_window_in_tray_mode(_gtk, headless_ctrl):
-    from audio_spider.app import AudioSpiderApp, MainWindow
+def test_delete_event_hides_window_in_tray_mode(headless_ctrl: HeadlessCtrl) -> None:
     from gi.repository import Gdk, Gtk
+
+    from audio_spider.app import AudioSpiderApp, MainWindow
 
     controller, model, cfg = headless_ctrl
     app = AudioSpiderApp(controller, model, cfg, use_tray=True, start_minimized=False)
@@ -141,9 +166,10 @@ def test_delete_event_hides_window_in_tray_mode(_gtk, headless_ctrl):
     win.destroy()
 
 
-def test_delete_event_quits_when_no_tray(_gtk, headless_ctrl):
-    from audio_spider.app import AudioSpiderApp, MainWindow
+def test_delete_event_quits_when_no_tray(headless_ctrl: HeadlessCtrl) -> None:
     from gi.repository import Gdk
+
+    from audio_spider.app import AudioSpiderApp, MainWindow
 
     controller, model, cfg = headless_ctrl
     app = AudioSpiderApp(controller, model, cfg, use_tray=False, start_minimized=False)

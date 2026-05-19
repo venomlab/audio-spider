@@ -76,7 +76,8 @@ def parse_module_args(arg_string: str) -> dict[str, str]:
 
 
 def _signature_from_pa(
-    module_name: str, args: dict[str, str],
+    module_name: str,
+    args: dict[str, str],
 ) -> ModuleSignature | None:
     if module_name == "module-null-sink":
         name = args.get("sink_name")

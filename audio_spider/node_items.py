@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import gi
-
-gi.require_version("GooCanvas", "2.0")
-
-from typing import TYPE_CHECKING
-
-from gi.repository import GooCanvas, Pango  # noqa: E402
 
 from audio_spider.graph_model import Edge, Node, NodeKind, Port, PortKind
 
+gi.require_version("GooCanvas", "2.0")
+
+from gi.repository import GooCanvas, Pango  # noqa: E402
+
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
 NODE_WIDTH = 200.0
 NODE_HEADER_HEIGHT = 28.0
@@ -82,7 +82,7 @@ class NodeItem(GooCanvas.CanvasGroup):
     children use local coordinates relative to the group origin.
     """
 
-    def __init__(self, node: Node, **kwargs) -> None:
+    def __init__(self, node: Node, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._node = node
         self._port_index: dict[str, tuple[float, float]] = {}  # in group-local coords
@@ -139,7 +139,7 @@ class NodeItem(GooCanvas.CanvasGroup):
     # ------------------------------------------------------------------
     # construction
 
-    def _iter_children(self):
+    def _iter_children(self) -> Iterator[Any]:
         for i in range(self.get_n_children()):
             yield self.get_child(i)
 
@@ -152,30 +152,33 @@ class NodeItem(GooCanvas.CanvasGroup):
 
         body = GooCanvas.CanvasRect(
             parent=self,
-            x=0, y=0,
-            width=NODE_WIDTH, height=self._height,
-            radius_x=NODE_CORNER_RADIUS, radius_y=NODE_CORNER_RADIUS,
-            **{"fill-color-rgba": NODE_FILL[self._node.kind],
-               "stroke-color-rgba": NODE_STROKE,
-               "line-width": 1.0},
+            x=0,
+            y=0,
+            width=NODE_WIDTH,
+            height=self._height,
+            radius_x=NODE_CORNER_RADIUS,
+            radius_y=NODE_CORNER_RADIUS,
+            **{"fill-color-rgba": NODE_FILL[self._node.kind], "stroke-color-rgba": NODE_STROKE, "line-width": 1.0},
         )
         body.node_id = self._node.id
 
         header = GooCanvas.CanvasRect(
             parent=self,
-            x=0, y=0,
-            width=NODE_WIDTH, height=NODE_HEADER_HEIGHT,
-            radius_x=NODE_CORNER_RADIUS, radius_y=NODE_CORNER_RADIUS,
-            **{"fill-color-rgba": HEADER_FILL[self._node.kind],
-               "stroke-color-rgba": NODE_STROKE,
-               "line-width": 1.0},
+            x=0,
+            y=0,
+            width=NODE_WIDTH,
+            height=NODE_HEADER_HEIGHT,
+            radius_x=NODE_CORNER_RADIUS,
+            radius_y=NODE_CORNER_RADIUS,
+            **{"fill-color-rgba": HEADER_FILL[self._node.kind], "stroke-color-rgba": NODE_STROKE, "line-width": 1.0},
         )
         header.node_id = self._node.id
 
         text = GooCanvas.CanvasText(
             parent=self,
             text=self._node.label,
-            x=NODE_WIDTH / 2, y=NODE_HEADER_HEIGHT / 2,
+            x=NODE_WIDTH / 2,
+            y=NODE_HEADER_HEIGHT / 2,
             width=NODE_WIDTH - 16,
             anchor=GooCanvas.CanvasAnchorType.CENTER,
             alignment=Pango.Alignment.CENTER,
@@ -195,16 +198,25 @@ class NodeItem(GooCanvas.CanvasGroup):
             self._add_port_visuals(port, x=NODE_WIDTH, y=cy, on_left=False)
 
     def _add_port_visuals(
-        self, port: Port, *, x: float, y: float, on_left: bool,
+        self,
+        port: Port,
+        *,
+        x: float,
+        y: float,
+        on_left: bool,
     ) -> None:
         # Visible port circle
         ellipse = GooCanvas.CanvasEllipse(
             parent=self,
-            center_x=x, center_y=y,
-            radius_x=PORT_RADIUS, radius_y=PORT_RADIUS,
-            **{"fill-color-rgba": PORT_FILL[port.kind],
-               "stroke-color-rgba": PORT_DEFAULT_STROKE,
-               "line-width": PORT_DEFAULT_WIDTH},
+            center_x=x,
+            center_y=y,
+            radius_x=PORT_RADIUS,
+            radius_y=PORT_RADIUS,
+            **{
+                "fill-color-rgba": PORT_FILL[port.kind],
+                "stroke-color-rgba": PORT_DEFAULT_STROKE,
+                "line-width": PORT_DEFAULT_WIDTH,
+            },
         )
         ellipse.port_id = port.id
         ellipse.node_id = self._node.id
@@ -216,25 +228,27 @@ class NodeItem(GooCanvas.CanvasGroup):
         # transparent fill still receives clicks.
         hit = GooCanvas.CanvasEllipse(
             parent=self,
-            center_x=x, center_y=y,
-            radius_x=PORT_HIT_RADIUS, radius_y=PORT_HIT_RADIUS,
-            **{"fill-color-rgba": 0x00000000,
-               "stroke-color-rgba": 0x00000000,
-               "line-width": 0.0,
-               "pointer-events": GooCanvas.CanvasPointerEvents.FILL},
+            center_x=x,
+            center_y=y,
+            radius_x=PORT_HIT_RADIUS,
+            radius_y=PORT_HIT_RADIUS,
+            **{
+                "fill-color-rgba": 0x00000000,
+                "stroke-color-rgba": 0x00000000,
+                "line-width": 0.0,
+                "pointer-events": GooCanvas.CanvasPointerEvents.FILL,
+            },
         )
         hit.port_id = port.id
         hit.node_id = self._node.id
 
         label_x = x + (-PORT_LABEL_INSET if on_left else PORT_LABEL_INSET)
-        anchor = (
-            GooCanvas.CanvasAnchorType.E if on_left
-            else GooCanvas.CanvasAnchorType.W
-        )
+        anchor = GooCanvas.CanvasAnchorType.E if on_left else GooCanvas.CanvasAnchorType.W
         GooCanvas.CanvasText(
             parent=self,
             text=port.label,
-            x=label_x, y=y,
+            x=label_x,
+            y=y,
             anchor=anchor,
             **{"font": "Sans 9", "fill-color-rgba": 0x303030FF},
         )
@@ -254,7 +268,7 @@ class EdgeItem(GooCanvas.CanvasGroup):
     geometry, and lets users grab the edge without aiming pixel-precisely.
     """
 
-    def __init__(self, edge: Edge, path_provider: Callable[[Edge], str], **kwargs) -> None:
+    def __init__(self, edge: Edge, path_provider: Callable[[Edge], str], **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._edge = edge
         self._path_provider = path_provider
@@ -263,21 +277,25 @@ class EdgeItem(GooCanvas.CanvasGroup):
         self._hit_path = GooCanvas.CanvasPath(
             parent=self,
             data=data,
-            **{"stroke-color-rgba": 0x00000000,
-               "line-width": EDGE_HIT_WIDTH,
-               "pointer-events": GooCanvas.CanvasPointerEvents.STROKE},
+            **{
+                "stroke-color-rgba": 0x00000000,
+                "line-width": EDGE_HIT_WIDTH,
+                "pointer-events": GooCanvas.CanvasPointerEvents.STROKE,
+            },
         )
         self._hit_path.edge_id = edge.id
         self._visible_path = GooCanvas.CanvasPath(
             parent=self,
             data=data,
-            **{"stroke-color": EDGE_COLOR.get(edge.kind, "#888"),
-               "line-width": EDGE_WIDTH,
-               "antialias": 1,
-               # Visible path doesn't take hits — the wide hit path beneath
-               # already does, and having both pickable would shadow each
-               # other depending on z-order.
-               "pointer-events": GooCanvas.CanvasPointerEvents.NONE},
+            **{
+                "stroke-color": EDGE_COLOR.get(edge.kind, "#888"),
+                "line-width": EDGE_WIDTH,
+                "antialias": 1,
+                # Visible path doesn't take hits — the wide hit path beneath
+                # already does, and having both pickable would shadow each
+                # other depending on z-order.
+                "pointer-events": GooCanvas.CanvasPointerEvents.NONE,
+            },
         )
         self._visible_path.edge_id = edge.id
 
@@ -292,12 +310,16 @@ class EdgeItem(GooCanvas.CanvasGroup):
 
     def set_hover(self, hovered: bool) -> None:
         self._visible_path.set_property(
-            "line-width", EDGE_HOVER_WIDTH if hovered else EDGE_WIDTH,
+            "line-width",
+            EDGE_HOVER_WIDTH if hovered else EDGE_WIDTH,
         )
 
 
 def bezier_between(
-    x1: float, y1: float, x2: float, y2: float,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
     *,
     src_facing_right: bool = True,
     dst_facing_left: bool = True,

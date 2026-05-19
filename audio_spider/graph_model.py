@@ -19,7 +19,7 @@ class NodeKind(Enum):
     NULL_SINK = "null_sink"
     COMBINE_SINK = "combine_sink"
     MISSING = "missing"  # placeholder for endpoints referenced by an existing
-                          # module but no longer present in PulseAudio
+    # module but no longer present in PulseAudio
 
 
 EdgeKind = str  # "loopback" | "combine-member"
@@ -82,10 +82,7 @@ class GraphModel(GObject.Object):
         if node_id not in self._nodes:
             return
         # drop incident edges first so listeners see consistent state
-        incident = [
-            e.id for e in self._edges.values()
-            if node_id in (e.src_node, e.dst_node)
-        ]
+        incident = [e.id for e in self._edges.values() if node_id in (e.src_node, e.dst_node)]
         for edge_id in incident:
             self.remove_edge(edge_id)
         del self._nodes[node_id]

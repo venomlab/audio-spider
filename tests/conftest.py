@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 import pytest
 
 from audio_spider.errors import PABackendError
@@ -5,7 +7,7 @@ from audio_spider.pa_backend import PABackend
 
 
 @pytest.fixture
-def live_pa():
+def live_pa() -> Iterator[PABackend]:
     """A real PulseAudio backend, fresh per test.
 
     Function-scoped because PABackend.subscribe() is a one-shot — different

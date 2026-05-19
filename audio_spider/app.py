@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import gi
 
@@ -11,10 +11,10 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # noqa: E402
 
 if TYPE_CHECKING:
-    from .config import Config
-    from .controller import Controller
-    from .graph_model import GraphModel
-    from .tray import TrayIcon
+    from audio_spider.config import Config
+    from audio_spider.controller import Controller
+    from audio_spider.graph_model import GraphModel
+    from audio_spider.tray import TrayIcon
 
 log = logging.getLogger(__name__)
 
@@ -105,8 +105,7 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_center = Gtk.ToolButton.new(None, "Center view")
         btn_center.set_icon_name("zoom-fit-best")
         btn_center.set_tooltip_text(
-            "Recenter the viewport on canvas origin without moving nodes "
-            "or changing the zoom level.",
+            "Recenter the viewport on canvas origin without moving nodes or changing the zoom level.",
         )
         btn_center.connect("clicked", self._on_center_view_clicked)
         toolbar.insert(btn_center, -1)
@@ -138,8 +137,7 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_exit = Gtk.ToolButton.new(None, "Exit")
         btn_exit.set_icon_name("application-exit")
         btn_exit.set_tooltip_text(
-            "Quit Audio Spider completely (also closes the tray icon). "
-            "Loaded PulseAudio modules stay in place.",
+            "Quit Audio Spider completely (also closes the tray icon). Loaded PulseAudio modules stay in place.",
         )
         btn_exit.connect("clicked", self._on_exit_clicked)
         toolbar.insert(btn_exit, -1)
@@ -147,25 +145,26 @@ class MainWindow(Gtk.ApplicationWindow):
         return toolbar
 
     def _build_graph_view(self) -> Gtk.Widget:
-        from .graph_view import GraphView
+        from audio_spider.graph_view import GraphView
+
         self._graph_view = GraphView(self._model, controller=self._controller)
         return self._graph_view
 
     # --- signal handlers ---------------------------------------------
 
-    def _on_delete(self, _widget, _event) -> bool:
+    def _on_delete(self, _widget: Any, _event: Any) -> bool:
         if self._use_tray:
             self.hide()
             return True  # stop default destroy
         return False
 
-    def _on_configure(self, _widget, event) -> bool:
+    def _on_configure(self, _widget: Any, event: Any) -> bool:
         # remember window size for next launch
         self._cfg.window.w = event.width
         self._cfg.window.h = event.height
         return False
 
-    def _on_add_combine_sink_clicked(self, _btn) -> None:
+    def _on_add_combine_sink_clicked(self, _btn: Any) -> None:
         label = _prompt_text(
             self,
             "Add Speaker Group",
@@ -179,41 +178,43 @@ class MainWindow(Gtk.ApplicationWindow):
         sink_name = sanitize_pa_name(label, fallback="speaker_group")
         try:
             self._controller.request_create_combine_sink(
-                sink_name, members=[], description=label,
+                sink_name,
+                members=[],
+                description=label,
             )
             self._set_status(f"Created speaker group '{label}'")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._set_status(f"Failed: {e}")
 
-    def _on_exit_clicked(self, _btn) -> None:
+    def _on_exit_clicked(self, _btn: Any) -> None:
         app = self.get_application()
         if app is not None:
             app.quit()
 
-    def _on_reset_view_clicked(self, _btn) -> None:
+    def _on_reset_view_clicked(self, _btn: Any) -> None:
         try:
             self._controller.request_reset_layout()
             self._graph_view.reset_zoom()
             self._graph_view.reset_viewport()
             self._set_status("View reset to default")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._set_status(f"Reset view failed: {e}")
 
-    def _on_center_view_clicked(self, _btn) -> None:
+    def _on_center_view_clicked(self, _btn: Any) -> None:
         self._graph_view.reset_viewport()
         self._set_status("Viewport centered")
 
-    def _on_reset_zoom_clicked(self, _btn) -> None:
+    def _on_reset_zoom_clicked(self, _btn: Any) -> None:
         self._graph_view.reset_zoom()
         self._set_status("Zoom reset to 100%")
 
-    def _on_zoom_in_clicked(self, _btn) -> None:
+    def _on_zoom_in_clicked(self, _btn: Any) -> None:
         self._graph_view.zoom_in()
 
-    def _on_zoom_out_clicked(self, _btn) -> None:
+    def _on_zoom_out_clicked(self, _btn: Any) -> None:
         self._graph_view.zoom_out()
 
-    def _on_reload_clicked(self, _btn) -> None:
+    def _on_reload_clicked(self, _btn: Any) -> None:
         try:
             report = self._controller.reload_config()
             self._set_status(
@@ -221,13 +222,13 @@ class MainWindow(Gtk.ApplicationWindow):
                 f"{len(report.skipped)} already present, "
                 f"{len(report.errors)} failed",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._set_status(f"Reload failed: {e}")
 
-    def _on_controller_error(self, _controller, message: str) -> None:
+    def _on_controller_error(self, _controller: Any, message: str) -> None:
         self._set_status(message)
 
-    def _on_sync_complete(self, _controller) -> None:
+    def _on_sync_complete(self, _controller: Any) -> None:
         self._refresh_status()
 
     # --- helpers -----------------------------------------------------
@@ -264,11 +265,15 @@ class AudioSpiderApp(Gtk.Application):
     def do_activate(self) -> None:
         if self._window is None:
             self._window = MainWindow(
-                self, self._controller, self._model, self._cfg,
+                self,
+                self._controller,
+                self._model,
+                self._cfg,
                 use_tray=self._use_tray,
             )
             if self._use_tray:
-                from .tray import TrayIcon
+                from audio_spider.tray import TrayIcon
+
                 self._tray = TrayIcon(
                     on_show=self._toggle_window,
                     on_reload=self._reload,
@@ -305,19 +310,23 @@ def run_gui(
     minimized: bool,
 ) -> int:
     app = AudioSpiderApp(
-        controller, model, cfg,
+        controller,
+        model,
+        cfg,
         use_tray=not no_tray,
         start_minimized=minimized,
     )
-    return app.run([])
+    return int(app.run([]))
 
 
 def _prompt_text(parent: Gtk.Window, title: str, label: str) -> str | None:
     """Modal text-input dialog. Returns None if cancelled."""
     dialog = Gtk.Dialog(title=title, transient_for=parent, flags=0)
     dialog.add_buttons(
-        Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-        Gtk.STOCK_OK, Gtk.ResponseType.OK,
+        Gtk.STOCK_CANCEL,
+        Gtk.ResponseType.CANCEL,
+        Gtk.STOCK_OK,
+        Gtk.ResponseType.OK,
     )
     dialog.set_default_response(Gtk.ResponseType.OK)
     box = dialog.get_content_area()

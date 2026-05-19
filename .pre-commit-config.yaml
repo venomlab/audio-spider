@@ -1,0 +1,54 @@
+repos:
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: "v2.11.1"
+    hooks:
+      - id: pyproject-fmt
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.4
+    hooks:
+      # Run the formatter.
+      - id: ruff-format
+        name: Format code using ruff code formatter
+      # Run the upgrade
+      - id: ruff-check
+        name: Lint and fix what's safe to fix
+        args: ["--fix"]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        always_run: true
+        args: ["audio_spider", "tests"]
+        pass_filenames: false
+        additional_dependencies:
+          - types-click
+          - pytest-stub
+  - repo: local
+    hooks:
+      - id: pytest
+        name: Run tests
+        entry: uv run pytest tests
+        language: system
+        pass_filenames: false
+        always_run: true
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude_types:
+          - csv
+          - text
+      - id: end-of-file-fixer
+        exclude_types:
+          - csv
+          - text
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-xml
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+      - id: check-ast
+      - id: check-symlinks

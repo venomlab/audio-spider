@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pytest
 
 from audio_spider.graph_model import (
@@ -11,9 +13,11 @@ from audio_spider.graph_model import (
     PortKind,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
-def _node(node_id: str, kind: NodeKind = NodeKind.HW_SOURCE,
-          port_kind: PortKind = PortKind.SOURCE_OUT) -> Node:
+
+def _node(node_id: str, kind: NodeKind = NodeKind.HW_SOURCE, port_kind: PortKind = PortKind.SOURCE_OUT) -> Node:
     return Node(
         id=node_id,
         kind=kind,
@@ -25,8 +29,10 @@ def _node(node_id: str, kind: NodeKind = NodeKind.HW_SOURCE,
 def _edge(edge_id: str, src: str, dst: str) -> Edge:
     return Edge(
         id=edge_id,
-        src_node=src, src_port="p",
-        dst_node=dst, dst_port="p",
+        src_node=src,
+        src_port="p",
+        dst_node=dst,
+        dst_port="p",
         kind="loopback",
     )
 
@@ -34,17 +40,25 @@ def _edge(edge_id: str, src: str, dst: str) -> Edge:
 class Recorder:
     def __init__(self, model: GraphModel) -> None:
         self.events: list[tuple[str, ...]] = []
-        for signal in ("node-added", "node-removed", "node-moved",
-                       "node-changed", "edge-added", "edge-removed", "cleared"):
+        for signal in (
+            "node-added",
+            "node-removed",
+            "node-moved",
+            "node-changed",
+            "edge-added",
+            "edge-removed",
+            "cleared",
+        ):
             model.connect(signal, self._make_handler(signal))
 
-    def _make_handler(self, signal: str):
-        def handler(_model, *args):
+    def _make_handler(self, signal: str) -> Callable[..., None]:
+        def handler(_model: Any, *args: Any) -> None:
             self.events.append((signal, *args))
+
         return handler
 
 
-def test_add_node_emits_signal():
+def test_add_node_emits_signal() -> None:
     m = GraphModel()
     rec = Recorder(m)
     m.add_node(_node("a"))
@@ -52,14 +66,14 @@ def test_add_node_emits_signal():
     assert [n.id for n in m.nodes()] == ["a"]
 
 
-def test_add_duplicate_node_raises():
+def test_add_duplicate_node_raises() -> None:
     m = GraphModel()
     m.add_node(_node("a"))
     with pytest.raises(KeyError):
         m.add_node(_node("a"))
 
 
-def test_add_edge_requires_existing_nodes():
+def test_add_edge_requires_existing_nodes() -> None:
     m = GraphModel()
     m.add_node(_node("a"))
     with pytest.raises(KeyError, match="dst node missing"):
@@ -68,7 +82,7 @@ def test_add_edge_requires_existing_nodes():
         m.add_edge(_edge("e", "missing", "a"))
 
 
-def test_remove_node_drops_incident_edges():
+def test_remove_node_drops_incident_edges() -> None:
     m = GraphModel()
     m.add_node(_node("a"))
     m.add_node(_node("b", NodeKind.HW_SINK, PortKind.SINK_IN))
@@ -86,14 +100,14 @@ def test_remove_node_drops_incident_edges():
     assert ("node-removed", "b") in rec.events
 
 
-def test_remove_missing_node_is_noop():
+def test_remove_missing_node_is_noop() -> None:
     m = GraphModel()
     rec = Recorder(m)
     m.remove_node("ghost")  # should not raise, no events
     assert rec.events == []
 
 
-def test_move_node_updates_coords_and_emits():
+def test_move_node_updates_coords_and_emits() -> None:
     m = GraphModel()
     n = _node("a")
     m.add_node(n)
@@ -104,7 +118,7 @@ def test_move_node_updates_coords_and_emits():
     assert rec.events == [("node-moved", "a")]
 
 
-def test_update_node_replaces_in_place():
+def test_update_node_replaces_in_place() -> None:
     m = GraphModel()
     m.add_node(_node("a"))
     new = Node(id="a", kind=NodeKind.NULL_SINK, label="renamed", ports=[])
@@ -114,7 +128,7 @@ def test_update_node_replaces_in_place():
     assert rec.events == [("node-changed", "a")]
 
 
-def test_clear_drops_everything():
+def test_clear_drops_everything() -> None:
     m = GraphModel()
     m.add_node(_node("a"))
     m.add_node(_node("b", NodeKind.HW_SINK, PortKind.SINK_IN))
@@ -126,7 +140,7 @@ def test_clear_drops_everything():
     assert ("cleared",) in rec.events
 
 
-def test_find_returns_none_for_unknown():
+def test_find_returns_none_for_unknown() -> None:
     m = GraphModel()
     assert m.find_node("ghost") is None
     assert m.find_edge("ghost") is None

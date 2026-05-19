@@ -120,7 +120,9 @@ class Controller(GObject.Object):
     # user intents
 
     def request_create_null_sink(
-        self, name: str, description: str | None = None,
+        self,
+        name: str,
+        description: str | None = None,
     ) -> int:
         try:
             idx = self._pa.load_null_sink(name, description)
@@ -170,7 +172,9 @@ class Controller(GObject.Object):
         return idx
 
     def request_add_combine_member(
-        self, combine_id: str, member_sink_id: str,
+        self,
+        combine_id: str,
+        member_sink_id: str,
     ) -> None:
         """Add a real sink to a Speaker Group. Idempotent."""
         node = self._model.find_node(combine_id)
@@ -186,7 +190,9 @@ class Controller(GObject.Object):
         self._reload_combine(node, [*current, member_sink_id])
 
     def request_remove_combine_member(
-        self, combine_id: str, member_sink_id: str,
+        self,
+        combine_id: str,
+        member_sink_id: str,
     ) -> None:
         """Drop a member from a Speaker Group. No-op if not a member."""
         node = self._model.find_node(combine_id)
@@ -196,7 +202,8 @@ class Controller(GObject.Object):
         if member_sink_id not in current:
             return
         self._reload_combine(
-            node, [m for m in current if m != member_sink_id],
+            node,
+            [m for m in current if m != member_sink_id],
         )
 
     def _read_combine_members(self, node: Node) -> list[str]:
@@ -228,7 +235,9 @@ class Controller(GObject.Object):
                 raise
         try:
             new_idx = self._pa.load_combine_sink(
-                node.id, new_members, description,
+                node.id,
+                new_members,
+                description,
             )
         except PABackendError as e:
             self.resume_rebuild()
@@ -284,10 +293,7 @@ class Controller(GObject.Object):
             raise ValidationError(msg)
 
         # Real PA source name: for hw → node id, for monitor → "<sink>.monitor".
-        pa_source = (
-            src_node.id if src_port.kind == PortKind.SOURCE_OUT
-            else f"{src_node.id}.monitor"
-        )
+        pa_source = src_node.id if src_port.kind == PortKind.SOURCE_OUT else f"{src_node.id}.monitor"
         pa_sink = dst_node.id
 
         try:
@@ -297,11 +303,13 @@ class Controller(GObject.Object):
             raise
 
         cm_id = self._loopback_cfg_id(pa_source, pa_sink)
-        self._upsert_config_module(ConfigModule(
-            id=cm_id,
-            kind="loopback",
-            params={"source": pa_source, "sink": pa_sink},
-        ))
+        self._upsert_config_module(
+            ConfigModule(
+                id=cm_id,
+                kind="loopback",
+                params={"source": pa_source, "sink": pa_sink},
+            )
+        )
         self._cfg_module_index[cm_id] = idx
         self._save_config()
         self.rebuild_model()
@@ -391,19 +399,20 @@ class Controller(GObject.Object):
         if node is None or node.kind != NodeKind.MISSING:
             return
         related = [
-            e for e in self._model.edges()
-            if e.kind == "loopback"
-            and (node_id in (e.src_node, e.dst_node))
-            and e.pa_module_index is not None
+            e
+            for e in self._model.edges()
+            if e.kind == "loopback" and (node_id in (e.src_node, e.dst_node)) and e.pa_module_index is not None
         ]
         failures: list[str] = []
         for edge in related:
+            module_index = edge.pa_module_index
+            assert module_index is not None  # guaranteed by filter above  # noqa: S101
             try:
-                self._pa.unload(edge.pa_module_index)
+                self._pa.unload(module_index)
             except PABackendError as e:
                 failures.append(str(e))
                 continue
-            self._remove_config_module_by_module_index(edge.pa_module_index)
+            self._remove_config_module_by_module_index(module_index)
         self._save_config()
         self.rebuild_model()
         if failures:
@@ -461,27 +470,19 @@ class Controller(GObject.Object):
     # ------------------------------------------------------------------
     # model construction
 
-    def rebuild_model(self) -> None:
+    def rebuild_model(self) -> None:  # noqa: C901
         sources = self._pa.list_sources()
         sinks = self._pa.list_sinks()
         modules = self._pa.list_modules()
 
-        sink_by_owner: dict[int, PASink] = {
-            s.owner_module: s for s in sinks if s.owner_module is not None
-        }
+        sink_by_owner: dict[int, PASink] = {s.owner_module: s for s in sinks if s.owner_module is not None}
         null_sink_names = {
-            sink_by_owner[m.index].name
-            for m in modules
-            if m.name == "module-null-sink" and m.index in sink_by_owner
+            sink_by_owner[m.index].name for m in modules if m.name == "module-null-sink" and m.index in sink_by_owner
         }
         combine_sink_names = {
-            sink_by_owner[m.index].name
-            for m in modules
-            if m.name == "module-combine-sink" and m.index in sink_by_owner
+            sink_by_owner[m.index].name for m in modules if m.name == "module-combine-sink" and m.index in sink_by_owner
         }
-        owner_by_sink_name: dict[str, int] = {
-            s.name: s.owner_module for s in sinks if s.owner_module is not None
-        }
+        owner_by_sink_name: dict[str, int] = {s.name: s.owner_module for s in sinks if s.owner_module is not None}
 
         # build a fresh layout snapshot so positions are stable across rebuild
         next_row: dict[str, float] = {
@@ -552,7 +553,9 @@ class Controller(GObject.Object):
         for module in modules:
             args = parse_module_args(module.argument)
             for edge in self._edges_from_module(
-                module, args, owner_by_sink_name,
+                module,
+                args,
+                owner_by_sink_name,
             ):
                 if (
                     self._model.find_node(edge.src_node) is not None
@@ -602,11 +605,13 @@ class Controller(GObject.Object):
             Port(id=PORT_MONITOR_OUT, kind=PortKind.MONITOR_OUT, label="monitor"),
         ]
         if kind == NodeKind.COMBINE_SINK:
-            ports.append(Port(
-                id=PORT_COMBINE_MEMBERS,
-                kind=PortKind.COMBINE_MEMBERS,
-                label="members",
-            ))
+            ports.append(
+                Port(
+                    id=PORT_COMBINE_MEMBERS,
+                    kind=PortKind.COMBINE_MEMBERS,
+                    label="members",
+                )
+            )
         return Node(
             id=s.name,
             kind=kind,
@@ -628,15 +633,17 @@ class Controller(GObject.Object):
                 return []
             src_node_id, src_port_id = self._resolve_source_endpoint(pa_source)
             dst_node_id, dst_port_id = pa_sink, PORT_SINK_IN
-            return [Edge(
-                id=f"lb-{module.index}",
-                src_node=src_node_id,
-                src_port=src_port_id,
-                dst_node=dst_node_id,
-                dst_port=dst_port_id,
-                kind="loopback",
-                pa_module_index=module.index,
-            )]
+            return [
+                Edge(
+                    id=f"lb-{module.index}",
+                    src_node=src_node_id,
+                    src_port=src_port_id,
+                    dst_node=dst_node_id,
+                    dst_port=dst_port_id,
+                    kind="loopback",
+                    pa_module_index=module.index,
+                )
+            ]
         if module.name == "module-combine-sink":
             sink_name = args.get("sink_name")
             slaves = [s for s in args.get("slaves", "").split(",") if s]

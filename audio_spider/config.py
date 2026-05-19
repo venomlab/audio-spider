@@ -106,7 +106,9 @@ def save(cfg: Config, path: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False)
     fd, tmp_name = tempfile.mkstemp(
-        prefix=".config-", suffix=".json", dir=path.parent,
+        prefix=".config-",
+        suffix=".json",
+        dir=path.parent,
     )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:

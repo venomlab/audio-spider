@@ -4,16 +4,20 @@ Auto-skip when PA isn't reachable (handled by the `live_pa` fixture).
 Each mutating test cleans up the modules it loaded; on failure pytest's
 `addfinalizer` ensures unload still runs so the system stays clean.
 """
+
 from __future__ import annotations
 
+import contextlib
 import time
+from typing import TYPE_CHECKING
 
 import pytest
 from gi.repository import GLib
 
 from audio_spider.errors import PABackendError
-from audio_spider.pa_backend import PABackend
 
+if TYPE_CHECKING:
+    from audio_spider.pa_backend import PABackend
 
 SINK_NAME = "audio_spider_test_vsink"
 SINK_DESC = "Audio Spider Test"
@@ -29,19 +33,17 @@ def _drain(timeout_s: float = 1.0) -> None:
 
 
 def _safe_unload(pa: PABackend, idx: int) -> None:
-    try:
+    with contextlib.suppress(PABackendError):
         pa.unload(idx)
-    except PABackendError:
-        pass
 
 
-def test_list_sinks_returns_at_least_one(live_pa: PABackend):
+def test_list_sinks_returns_at_least_one(live_pa: PABackend) -> None:
     sinks = live_pa.list_sinks()
     assert sinks, "expected at least one sink on the system"
     assert all(s.name for s in sinks)
 
 
-def test_list_sources_marks_monitors(live_pa: PABackend):
+def test_list_sources_marks_monitors(live_pa: PABackend) -> None:
     sources = live_pa.list_sources()
     assert sources
     monitors = [s for s in sources if s.is_monitor]
@@ -50,12 +52,12 @@ def test_list_sources_marks_monitors(live_pa: PABackend):
         assert m.monitor_of_sink is not None
 
 
-def test_list_modules_includes_native_protocol(live_pa: PABackend):
+def test_list_modules_includes_native_protocol(live_pa: PABackend) -> None:
     mods = live_pa.list_modules()
     assert any(m.name.startswith("module-native-protocol") for m in mods)
 
 
-def test_load_unload_null_sink(live_pa: PABackend, request: pytest.FixtureRequest):
+def test_load_unload_null_sink(live_pa: PABackend, request: pytest.FixtureRequest) -> None:
     idx = live_pa.load_null_sink(SINK_NAME, SINK_DESC)
     request.addfinalizer(lambda: _safe_unload(live_pa, idx))
     sinks = {s.name: s for s in live_pa.list_sinks()}
@@ -66,8 +68,9 @@ def test_load_unload_null_sink(live_pa: PABackend, request: pytest.FixtureReques
 
 
 def test_null_sink_creates_monitor_source(
-    live_pa: PABackend, request: pytest.FixtureRequest,
-):
+    live_pa: PABackend,
+    request: pytest.FixtureRequest,
+) -> None:
     idx = live_pa.load_null_sink(SINK_NAME)
     request.addfinalizer(lambda: _safe_unload(live_pa, idx))
     monitor = f"{SINK_NAME}.monitor"
@@ -75,8 +78,9 @@ def test_null_sink_creates_monitor_source(
 
 
 def test_loopback_into_null_sink(
-    live_pa: PABackend, request: pytest.FixtureRequest,
-):
+    live_pa: PABackend,
+    request: pytest.FixtureRequest,
+) -> None:
     sink_idx = live_pa.load_null_sink(SINK_NAME)
     request.addfinalizer(lambda: _safe_unload(live_pa, sink_idx))
 
@@ -93,8 +97,9 @@ def test_loopback_into_null_sink(
 
 
 def test_combine_sink_loads_without_members(
-    live_pa: PABackend, request: pytest.FixtureRequest,
-):
+    live_pa: PABackend,
+    request: pytest.FixtureRequest,
+) -> None:
     """PA accepts a combine-sink with no slaves; we add them later."""
     idx = live_pa.load_combine_sink("audio_spider_combine_empty", [])
     request.addfinalizer(lambda: _safe_unload(live_pa, idx))
@@ -105,15 +110,16 @@ def test_combine_sink_loads_without_members(
 
 
 def test_combine_sink_with_existing_sink(
-    live_pa: PABackend, request: pytest.FixtureRequest,
-):
+    live_pa: PABackend,
+    request: pytest.FixtureRequest,
+) -> None:
     # use an existing real sink as the single member
-    hw_sinks = [
-        s for s in live_pa.list_sinks() if s.owner_module is None
-    ] or live_pa.list_sinks()
+    hw_sinks = [s for s in live_pa.list_sinks() if s.owner_module is None] or live_pa.list_sinks()
     member = hw_sinks[0].name
     idx = live_pa.load_combine_sink(
-        "audio_spider_test_combine", [member], description="Test Combine",
+        "audio_spider_test_combine",
+        [member],
+        description="Test Combine",
     )
     request.addfinalizer(lambda: _safe_unload(live_pa, idx))
     sinks = {s.name: s for s in live_pa.list_sinks()}
@@ -121,18 +127,17 @@ def test_combine_sink_with_existing_sink(
     assert sinks["audio_spider_test_combine"].description == "Test Combine"
 
 
-def test_unload_invalid_index_raises(live_pa: PABackend):
+def test_unload_invalid_index_raises(live_pa: PABackend) -> None:
     with pytest.raises(PABackendError, match="unload module"):
         live_pa.unload(999_999)
 
 
 def test_subscribe_receives_load_and_unload_events(
-    live_pa: PABackend, request: pytest.FixtureRequest,
-):
+    live_pa: PABackend,
+    request: pytest.FixtureRequest,
+) -> None:
     events: list[tuple[str, str, int]] = []
-    live_pa.subscribe(
-        lambda ev: events.append((ev.facility, ev.type, ev.index))
-    )
+    live_pa.subscribe(lambda ev: events.append((ev.facility, ev.type, ev.index)))
 
     idx = live_pa.load_null_sink(SINK_NAME)
     request.addfinalizer(lambda: _safe_unload(live_pa, idx))
@@ -141,13 +146,11 @@ def test_subscribe_receives_load_and_unload_events(
     _drain()
 
     module_events = [(f, t, i) for f, t, i in events if i == idx]
-    assert any("new" in t for _, t, _ in module_events), \
-        f"no 'new' event for module {idx}: {events}"
-    assert any("remove" in t for _, t, _ in module_events), \
-        f"no 'remove' event for module {idx}: {events}"
+    assert any("new" in t for _, t, _ in module_events), f"no 'new' event for module {idx}: {events}"
+    assert any("remove" in t for _, t, _ in module_events), f"no 'remove' event for module {idx}: {events}"
 
 
-def test_double_subscribe_raises(live_pa: PABackend):
+def test_double_subscribe_raises(live_pa: PABackend) -> None:
     live_pa.subscribe(lambda _: None)
     with pytest.raises(PABackendError, match="already subscribed"):
         live_pa.subscribe(lambda _: None)
