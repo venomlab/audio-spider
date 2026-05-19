@@ -22,5 +22,13 @@ docker run --rm \
     "${IMAGE_TAG}"
 
 echo
+echo "==> Generating SHA-256 checksums"
+( cd "${OUT_DIR}" && for f in *.deb; do
+    [ -e "${f}" ] || { echo "no .deb produced"; exit 1; }
+    sha256sum "${f}" > "${f}.sha256"
+    echo "  ${f}.sha256"
+done )
+
+echo
 echo "==> Artifacts in ${OUT_DIR}:"
-ls -1 "${OUT_DIR}"/*.deb 2>/dev/null || { echo "no .deb produced"; exit 1; }
+ls -1 "${OUT_DIR}"/*.deb "${OUT_DIR}"/*.sha256 2>/dev/null
