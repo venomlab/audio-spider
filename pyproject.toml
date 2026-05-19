@@ -1,7 +1,7 @@
 [project]
 name = "audio-spider"
 version = "0.1.0"
-description = "GTK3 flow-graph editor for PulseAudio: combine speakers into groups and route inputs to outputs visually."
+description = "GTK3 flow-graph editor for PulseAudio: combine speakers into groups and route inputs to outputs visually"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

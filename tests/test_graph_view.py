@@ -165,7 +165,7 @@ def _populated_view_with_controller(_gtk):
     from audio_spider.controller import Controller
     from audio_spider.graph_model import GraphModel
     from audio_spider.graph_view import GraphView
-    from audio_spider.tests.test_controller import FakePA
+    from tests.test_controller import FakePA
 
     pa = FakePA()
     pa.add_hw_source("mic_a", "Mic A")

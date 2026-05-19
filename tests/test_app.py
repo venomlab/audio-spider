@@ -34,7 +34,7 @@ def headless_ctrl(tmp_path: Path):
     from audio_spider.config import Config
     from audio_spider.controller import Controller
     from audio_spider.graph_model import GraphModel
-    from audio_spider.tests.test_controller import FakePA
+    from tests.test_controller import FakePA
 
     pa = FakePA()
     pa.add_hw_source("mic_a", "Microphone A")
