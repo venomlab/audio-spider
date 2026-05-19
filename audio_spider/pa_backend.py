@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -8,7 +9,7 @@ from typing import Any
 import pulsectl
 from gi.repository import GLib
 
-from .errors import PABackendError
+from audio_spider.errors import PABackendError
 
 
 @dataclass(frozen=True)
@@ -89,35 +90,31 @@ class PABackend:
         try:
             self._pulse = pulsectl.Pulse(self._client_name)
         except pulsectl.PulseError as e:
-            raise PABackendError(f"cannot connect to PulseAudio: {e}") from e
+            msg = f"cannot connect to PulseAudio: {e}"
+            raise PABackendError(msg) from e
 
     def close(self) -> None:
         # non-destructive: never unload loaded modules on shutdown
         self._stop_event.set()
         if self._event_pulse is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._event_pulse.event_listen_stop()
-            except Exception:
-                pass
         if self._event_thread is not None:
             self._event_thread.join(timeout=2.0)
             self._event_thread = None
         if self._event_pulse is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._event_pulse.close()
-            except Exception:
-                pass
             self._event_pulse = None
         if self._pulse is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._pulse.close()
-            except Exception:
-                pass
             self._pulse = None
 
     def _require(self) -> pulsectl.Pulse:
         if self._pulse is None:
-            raise PABackendError("backend not connected")
+            msg = "backend not connected"
+            raise PABackendError(msg)
         return self._pulse
 
     def list_sources(self) -> list[PASource]:
@@ -125,7 +122,8 @@ class PABackend:
             try:
                 raws = self._require().source_list()
             except pulsectl.PulseError as e:
-                raise PABackendError(f"source_list failed: {e}") from e
+                msg = f"source_list failed: {e}"
+                raise PABackendError(msg) from e
         result: list[PASource] = []
         for s in raws:
             monitor_name = getattr(s, "monitor_of_sink_name", None)
@@ -143,7 +141,8 @@ class PABackend:
             try:
                 raws = self._require().sink_list()
             except pulsectl.PulseError as e:
-                raise PABackendError(f"sink_list failed: {e}") from e
+                msg = f"sink_list failed: {e}"
+                raise PABackendError(msg) from e
         result: list[PASink] = []
         for s in raws:
             owner = s.owner_module if s.owner_module >= 0 else None
@@ -160,7 +159,8 @@ class PABackend:
             try:
                 raws = self._require().module_list()
             except pulsectl.PulseError as e:
-                raise PABackendError(f"module_list failed: {e}") from e
+                msg = f"module_list failed: {e}"
+                raise PABackendError(msg) from e
         return [
             PAModule(index=m.index, name=m.name, argument=m.argument or "")
             for m in raws
@@ -170,7 +170,7 @@ class PABackend:
         params: dict[str, Any] = {"sink_name": name}
         if description:
             params["sink_properties"] = format_proplist(
-                {"device.description": description}
+                {"device.description": description},
             )
         return self._load("module-null-sink", params)
 
@@ -188,7 +188,7 @@ class PABackend:
             params["slaves"] = ",".join(members)
         if description:
             params["sink_properties"] = format_proplist(
-                {"device.description": description}
+                {"device.description": description},
             )
         return self._load("module-combine-sink", params)
 
@@ -211,11 +211,13 @@ class PABackend:
             try:
                 idx = self._require().module_load(module_name, args)
             except pulsectl.PulseError as e:
+                msg = f"failed to load {module_name} ({args}): {e}"
                 raise PABackendError(
-                    f"failed to load {module_name} ({args}): {e}"
+                    msg,
                 ) from e
         if idx is None or idx < 0:
-            raise PABackendError(f"failed to load {module_name} ({args})")
+            msg = f"failed to load {module_name} ({args})"
+            raise PABackendError(msg)
         return int(idx)
 
     def unload(self, module_index: int) -> None:
@@ -223,22 +225,25 @@ class PABackend:
             try:
                 self._require().module_unload(module_index)
             except pulsectl.PulseError as e:
+                msg = f"unload module {module_index} failed: {e}"
                 raise PABackendError(
-                    f"unload module {module_index} failed: {e}"
+                    msg,
                 ) from e
 
     def subscribe(self, callback: EventCallback, timeout: float = 2.0) -> None:
         if self._event_thread is not None:
-            raise PABackendError("already subscribed")
+            msg = "already subscribed"
+            raise PABackendError(msg)
         self._callback = callback
         self._stop_event.clear()
         self._ready_event.clear()
         self._event_thread = threading.Thread(
-            target=self._event_loop, name="pa-events", daemon=True
+            target=self._event_loop, name="pa-events", daemon=True,
         )
         self._event_thread.start()
         if not self._ready_event.wait(timeout):
-            raise PABackendError("event listener failed to start in time")
+            msg = "event listener failed to start in time"
+            raise PABackendError(msg)
 
     def _event_loop(self) -> None:
         try:
@@ -268,8 +273,6 @@ class PABackend:
 
     @staticmethod
     def _dispatch(cb: EventCallback, ev: PAEvent) -> bool:
-        try:
+        with contextlib.suppress(Exception):
             cb(ev)
-        except Exception:
-            pass
         return False

@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import logging
 import threading
-from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from gi.repository import GObject
 
-from . import config as config_module
-from .config import Config, ConfigModule
-from .errors import AudioSpiderError, PABackendError, ValidationError
-from .graph_model import (
+from audio_spider import config as config_module
+from audio_spider.config import Config, ConfigModule
+from audio_spider.errors import PABackendError, ValidationError
+from audio_spider.graph_model import (
     Edge,
     GraphModel,
     Node,
@@ -18,8 +17,12 @@ from .graph_model import (
     Port,
     PortKind,
 )
-from .pa_backend import PABackend, PAEvent, PAModule, PASink, PASource
-from .reconcile import ReconcileReport, parse_module_args, reconcile
+from audio_spider.reconcile import ReconcileReport, parse_module_args, reconcile
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from audio_spider.pa_backend import PABackend, PAEvent, PAModule, PASink, PASource
 
 log = logging.getLogger(__name__)
 
@@ -143,7 +146,8 @@ class Controller(GObject.Object):
     ) -> int:
         """Create a Speaker Group. `members` may be empty — add members later
         via `request_add_combine_member` (or by dragging from the group's
-        members port)."""
+        members port).
+        """
         members = list(members or [])
         try:
             idx = self._pa.load_combine_sink(name, members, description)
@@ -171,13 +175,15 @@ class Controller(GObject.Object):
         """Add a real sink to a Speaker Group. Idempotent."""
         node = self._model.find_node(combine_id)
         if node is None or node.kind != NodeKind.COMBINE_SINK:
-            raise ValidationError(f"not a Speaker Group: {combine_id}")
+            msg = f"not a Speaker Group: {combine_id}"
+            raise ValidationError(msg)
         if combine_id == member_sink_id:
-            raise ValidationError("a Speaker Group cannot include itself")
+            msg = "a Speaker Group cannot include itself"
+            raise ValidationError(msg)
         current = self._read_combine_members(node)
         if member_sink_id in current:
             return
-        self._reload_combine(node, current + [member_sink_id])
+        self._reload_combine(node, [*current, member_sink_id])
 
     def request_remove_combine_member(
         self, combine_id: str, member_sink_id: str,
@@ -258,20 +264,24 @@ class Controller(GObject.Object):
         src_node = self._model.find_node(src_node_id)
         dst_node = self._model.find_node(dst_node_id)
         if src_node is None or dst_node is None:
-            raise ValidationError("source or destination node not found")
+            msg = "source or destination node not found"
+            raise ValidationError(msg)
         src_port = next((p for p in src_node.ports if p.id == src_port_id), None)
         dst_port = next((p for p in dst_node.ports if p.id == dst_port_id), None)
         if src_port is None or dst_port is None:
-            raise ValidationError("port not found")
+            msg = "port not found"
+            raise ValidationError(msg)
         if dst_port.kind != PortKind.SINK_IN:
-            raise ValidationError("destination port must be SINK_IN")
+            msg = "destination port must be SINK_IN"
+            raise ValidationError(msg)
 
         if src_port.kind == PortKind.COMBINE_MEMBERS:
             self.request_add_combine_member(src_node.id, dst_node.id)
             return None
 
         if src_port.kind not in (PortKind.SOURCE_OUT, PortKind.MONITOR_OUT):
-            raise ValidationError("source port must be SOURCE_OUT or MONITOR_OUT")
+            msg = "source port must be SOURCE_OUT or MONITOR_OUT"
+            raise ValidationError(msg)
 
         # Real PA source name: for hw → node id, for monitor → "<sink>.monitor".
         pa_source = (
@@ -346,7 +356,7 @@ class Controller(GObject.Object):
                 # combine-member edges share the combine-sink's module index,
                 # which is already accounted for if we're deleting that node.
                 continue
-            if edge.src_node == node_id or edge.dst_node == node_id:
+            if node_id in (edge.src_node, edge.dst_node):
                 related[edge.pa_module_index] = None
 
         primary_error: PABackendError | None = None
@@ -365,7 +375,7 @@ class Controller(GObject.Object):
         self.rebuild_model()
         if secondary_failures:
             self._emit_error(
-                "some loopback unloads failed: " + "; ".join(secondary_failures)
+                "some loopback unloads failed: " + "; ".join(secondary_failures),
             )
         if primary_error is not None:
             self._emit_error(f"unload node: {primary_error}")
@@ -383,7 +393,7 @@ class Controller(GObject.Object):
         related = [
             e for e in self._model.edges()
             if e.kind == "loopback"
-            and (e.src_node == node_id or e.dst_node == node_id)
+            and (node_id in (e.src_node, e.dst_node))
             and e.pa_module_index is not None
         ]
         failures: list[str] = []
@@ -398,7 +408,7 @@ class Controller(GObject.Object):
         self.rebuild_model()
         if failures:
             self._emit_error(
-                "some unloads failed: " + "; ".join(failures)
+                "some unloads failed: " + "; ".join(failures),
             )
 
     def request_move_node(self, node_id: str, x: float, y: float) -> None:
@@ -412,7 +422,8 @@ class Controller(GObject.Object):
     def request_reset_layout(self) -> None:
         """Drop every saved node position so the next rebuild re-applies the
         auto-layout (four columns left-to-right). Useful when a node has been
-        dragged off-screen and the user can't find it."""
+        dragged off-screen and the user can't find it.
+        """
         self._cfg.layout.clear()
         self._save_config()
         self.rebuild_model()

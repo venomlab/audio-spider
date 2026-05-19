@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tempfile
@@ -7,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .errors import ConfigError
+from audio_spider.errors import ConfigError
 
 CONFIG_VERSION = 1
 APP_NAME = "audio_spider"
@@ -46,8 +47,9 @@ class Config:
     def from_dict(cls, data: dict[str, Any]) -> Config:
         version = data.get("version", 1)
         if not isinstance(version, int) or version > CONFIG_VERSION:
+            msg = f"unsupported config version: {version!r} (max {CONFIG_VERSION})"
             raise ConfigError(
-                f"unsupported config version: {version!r} (max {CONFIG_VERSION})"
+                msg,
             )
         try:
             modules = [
@@ -60,7 +62,8 @@ class Config:
                 if m.get("kind") != "virtual-mic"
             ]
         except (KeyError, TypeError) as e:
-            raise ConfigError(f"malformed module entry: {e}") from e
+            msg = f"malformed module entry: {e}"
+            raise ConfigError(msg) from e
         layout = {
             str(k): {"x": float(v["x"]), "y": float(v["y"])}
             for k, v in data.get("layout", {}).items()
@@ -83,14 +86,17 @@ def load(path: Path | None = None) -> Config:
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as e:
-        raise ConfigError(f"cannot read {path}: {e}") from e
+        msg = f"cannot read {path}: {e}"
+        raise ConfigError(msg) from e
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise ConfigError(f"malformed JSON in {path}: {e}") from e
+        msg = f"malformed JSON in {path}: {e}"
+        raise ConfigError(msg) from e
     if not isinstance(data, dict):
+        msg = f"config root must be object in {path}, got {type(data).__name__}"
         raise ConfigError(
-            f"config root must be object in {path}, got {type(data).__name__}"
+            msg,
         )
     return Config.from_dict(data)
 
@@ -100,15 +106,13 @@ def save(cfg: Config, path: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False)
     fd, tmp_name = tempfile.mkstemp(
-        prefix=".config-", suffix=".json", dir=path.parent
+        prefix=".config-", suffix=".json", dir=path.parent,
     )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(payload)
         os.replace(tmp_name, path)
     except Exception:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp_name)
-        except FileNotFoundError:
-            pass
         raise

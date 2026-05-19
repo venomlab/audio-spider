@@ -73,7 +73,8 @@ class GraphModel(GObject.Object):
 
     def add_node(self, node: Node) -> None:
         if node.id in self._nodes:
-            raise KeyError(f"node already exists: {node.id}")
+            msg = f"node already exists: {node.id}"
+            raise KeyError(msg)
         self._nodes[node.id] = node
         self.emit("node-added", node.id)
 
@@ -83,7 +84,7 @@ class GraphModel(GObject.Object):
         # drop incident edges first so listeners see consistent state
         incident = [
             e.id for e in self._edges.values()
-            if e.src_node == node_id or e.dst_node == node_id
+            if node_id in (e.src_node, e.dst_node)
         ]
         for edge_id in incident:
             self.remove_edge(edge_id)
@@ -104,11 +105,14 @@ class GraphModel(GObject.Object):
 
     def add_edge(self, edge: Edge) -> None:
         if edge.id in self._edges:
-            raise KeyError(f"edge already exists: {edge.id}")
+            msg = f"edge already exists: {edge.id}"
+            raise KeyError(msg)
         if edge.src_node not in self._nodes:
-            raise KeyError(f"src node missing: {edge.src_node}")
+            msg = f"src node missing: {edge.src_node}"
+            raise KeyError(msg)
         if edge.dst_node not in self._nodes:
-            raise KeyError(f"dst node missing: {edge.dst_node}")
+            msg = f"dst node missing: {edge.dst_node}"
+            raise KeyError(msg)
         self._edges[edge.id] = edge
         self.emit("edge-added", edge.id)
 

@@ -7,9 +7,9 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("GooCanvas", "2.0")
 
-from gi.repository import GooCanvas, Gdk, Gtk  # noqa: E402
+from gi.repository import Gdk, GooCanvas, Gtk  # noqa: E402
 
-from .drag_state import (
+from audio_spider.drag_state import (
     ConnectIntent,
     DragMachine,
     EdgeHit,
@@ -19,10 +19,9 @@ from .drag_state import (
     PortHit,
     can_connect,
 )
-from .graph_model import Edge, GraphModel, Node, NodeKind, Port, PortKind
-from .node_items import (
+from audio_spider.graph_model import Edge, GraphModel, Node, NodeKind, Port, PortKind
+from audio_spider.node_items import (
     EDGE_WIDTH,
-    NODE_WIDTH,
     EdgeItem,
     NodeItem,
     bezier_between,
@@ -60,7 +59,7 @@ class GraphView(Gtk.EventBox):
     def __init__(
         self,
         model: GraphModel,
-        controller: "Controller | None" = None,
+        controller: Controller | None = None,
     ) -> None:
         super().__init__()
         self._model = model
@@ -146,14 +145,16 @@ class GraphView(Gtk.EventBox):
 
     def reset_viewport(self) -> None:
         """Reset the view translation so canvas user (0, 0) sits at the
-        widget's top-left, without changing zoom."""
+        widget's top-left, without changing zoom.
+        """
         self._view_tx = 0.0
         self._view_ty = 0.0
         self._apply_view_transform()
 
     def reset_zoom(self) -> None:
         """Set zoom back to 100%, anchored at the viewport center so the
-        content currently in the middle of the view stays put."""
+        content currently in the middle of the view stays put.
+        """
         alloc = self._canvas.get_allocation()
         cx = alloc.width / 2.0 if alloc.width > 0 else 0.0
         cy = alloc.height / 2.0 if alloc.height > 0 else 0.0
@@ -161,7 +162,8 @@ class GraphView(Gtk.EventBox):
 
     def _apply_view_transform(self) -> None:
         """Push the current (translate, scale) tuple to the view group.
-        Everything underneath inherits the transform."""
+        Everything underneath inherits the transform.
+        """
         self._view_group.set_simple_transform(
             self._view_tx, self._view_ty, self._view_scale, 0.0,
         )
@@ -182,7 +184,8 @@ class GraphView(Gtk.EventBox):
 
     def _widget_to_user(self, widget_x: float, widget_y: float) -> tuple[float, float]:
         """Map widget pixel to canvas user coords. Used for `get_item_at`,
-        which expects canvas user coords (NOT view-group local)."""
+        which expects canvas user coords (NOT view-group local).
+        """
         return self._canvas.convert_from_pixels(widget_x, widget_y)
 
     # ------------------------------------------------------------------
@@ -272,9 +275,9 @@ class GraphView(Gtk.EventBox):
         return bezier_between(sx, sy, dx, dy)
 
     def _refresh_incident_edges(self, node_id: str) -> None:
-        for edge_id, item in list(self._edge_items.items()):
+        for _edge_id, item in list(self._edge_items.items()):
             edge = item.edge
-            if edge.src_node == node_id or edge.dst_node == node_id:
+            if node_id in (edge.src_node, edge.dst_node):
                 item.refresh()
 
     # ------------------------------------------------------------------
@@ -447,7 +450,8 @@ class GraphView(Gtk.EventBox):
 
     def _update_hover_highlight(self, state, x: float, y: float) -> None:
         """Mark the port under the cursor (if compatible) as the active drop
-        target so the user sees where the edge will land."""
+        target so the user sees where the edge will land.
+        """
         from .drag_state import EdgeDrag
         if not isinstance(state, EdgeDrag):
             return
@@ -483,7 +487,8 @@ class GraphView(Gtk.EventBox):
 
     def _update_edge_hover(self, x: float, y: float) -> None:
         """Fire on every idle motion event: if cursor is over an edge's
-        hit-zone, thicken it so the user knows right-click works there."""
+        hit-zone, thicken it so the user knows right-click works there.
+        """
         target = self._canvas.get_item_at(x, y, True)
         edge_id: str | None = None
         if target is not None and hasattr(target, "edge_id"):
@@ -592,7 +597,7 @@ class GraphView(Gtk.EventBox):
             if node.kind == NodeKind.MISSING:
                 item = Gtk.MenuItem(label="Remove all orphan connections")
                 item.set_tooltip_text(
-                    "Unload every loopback that targets this missing endpoint"
+                    "Unload every loopback that targets this missing endpoint",
                 )
                 item.connect(
                     "activate",
@@ -668,7 +673,8 @@ class GraphView(Gtk.EventBox):
     ) -> bool:
         """Build the menu for a Speaker Group's `members` port: existing
         members get a Remove entry; a submenu lists the remaining hw sinks
-        that can still be added."""
+        that can still be added.
+        """
         existing = [
             e for e in self._model.edges()
             if e.kind == "combine-member" and e.src_node == node.id

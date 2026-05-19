@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .config import Config, ConfigModule
-from .errors import PABackendError
-from .pa_backend import PABackend
+from audio_spider.errors import PABackendError
+
+if TYPE_CHECKING:
+    from audio_spider.config import Config, ConfigModule
+    from audio_spider.pa_backend import PABackend
 
 ModuleSignature = tuple[Any, ...]
 
@@ -74,7 +76,7 @@ def parse_module_args(arg_string: str) -> dict[str, str]:
 
 
 def _signature_from_pa(
-    module_name: str, args: dict[str, str]
+    module_name: str, args: dict[str, str],
 ) -> ModuleSignature | None:
     if module_name == "module-null-sink":
         name = args.get("sink_name")
@@ -127,7 +129,8 @@ def _load_from_config(pa: PABackend, cm: ConfigModule) -> int:
             params["sink"],
             int(params.get("latency_msec", 1)),
         )
-    raise PABackendError(f"unknown module kind: {cm.kind}")
+    msg = f"unknown module kind: {cm.kind}"
+    raise PABackendError(msg)
 
 
 def _index_pa_signatures(

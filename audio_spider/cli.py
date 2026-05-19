@@ -6,12 +6,12 @@ from pathlib import Path
 
 import click
 
-from . import config as config_module
-from .controller import Controller
-from .errors import AudioSpiderError
-from .graph_model import GraphModel
-from .pa_backend import PABackend
-from .reconcile import ReconcileReport, reconcile
+from audio_spider import config as config_module
+from audio_spider.controller import Controller
+from audio_spider.errors import AudioSpiderError
+from audio_spider.graph_model import GraphModel
+from audio_spider.pa_backend import PABackend
+from audio_spider.reconcile import ReconcileReport, reconcile
 
 log = logging.getLogger("audio_spider")
 

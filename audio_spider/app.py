@@ -8,7 +8,7 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 
-from gi.repository import GLib, Gtk  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
 
 if TYPE_CHECKING:
     from .config import Config
@@ -31,14 +31,15 @@ def sanitize_pa_name(label: str, *, fallback: str = "vdev") -> str:
 
 class MainWindow(Gtk.ApplicationWindow):
     """Top-level window: toolbar, central area (placeholder until Stage F),
-    statusbar. delete-event either hides (tray mode) or quits."""
+    statusbar. delete-event either hides (tray mode) or quits.
+    """
 
     def __init__(
         self,
         application: Gtk.Application,
-        controller: "Controller",
-        model: "GraphModel",
-        cfg: "Config",
+        controller: Controller,
+        model: GraphModel,
+        cfg: Config,
         *,
         use_tray: bool,
     ) -> None:
@@ -78,7 +79,7 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_combine.set_tooltip_text(
             "Add a virtual speaker that routes audio to several real speakers "
             "at once. Useful for sending the same sound to e.g. headphones and "
-            "external speakers simultaneously."
+            "external speakers simultaneously.",
         )
         btn_combine.connect("clicked", self._on_add_combine_sink_clicked)
         toolbar.insert(btn_combine, -1)
@@ -96,7 +97,7 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_reset.set_tooltip_text(
             "Re-lay out every node in its default column AND recenter the "
             "viewport AND reset zoom to 100%. Use this if anything's been "
-            "dragged or zoomed off-screen."
+            "dragged or zoomed off-screen.",
         )
         btn_reset.connect("clicked", self._on_reset_view_clicked)
         toolbar.insert(btn_reset, -1)
@@ -105,7 +106,7 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_center.set_icon_name("zoom-fit-best")
         btn_center.set_tooltip_text(
             "Recenter the viewport on canvas origin without moving nodes "
-            "or changing the zoom level."
+            "or changing the zoom level.",
         )
         btn_center.connect("clicked", self._on_center_view_clicked)
         toolbar.insert(btn_center, -1)
@@ -138,7 +139,7 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_exit.set_icon_name("application-exit")
         btn_exit.set_tooltip_text(
             "Quit Audio Spider completely (also closes the tray icon). "
-            "Loaded PulseAudio modules stay in place."
+            "Loaded PulseAudio modules stay in place.",
         )
         btn_exit.connect("clicked", self._on_exit_clicked)
         toolbar.insert(btn_exit, -1)
@@ -218,7 +219,7 @@ class MainWindow(Gtk.ApplicationWindow):
             self._set_status(
                 f"Reloaded: {len(report.created)} created, "
                 f"{len(report.skipped)} already present, "
-                f"{len(report.errors)} failed"
+                f"{len(report.errors)} failed",
             )
         except Exception as e:
             self._set_status(f"Reload failed: {e}")
@@ -244,9 +245,9 @@ class MainWindow(Gtk.ApplicationWindow):
 class AudioSpiderApp(Gtk.Application):
     def __init__(
         self,
-        controller: "Controller",
-        model: "GraphModel",
-        cfg: "Config",
+        controller: Controller,
+        model: GraphModel,
+        cfg: Config,
         *,
         use_tray: bool,
         start_minimized: bool,
@@ -258,9 +259,9 @@ class AudioSpiderApp(Gtk.Application):
         self._use_tray = use_tray
         self._start_minimized = start_minimized
         self._window: MainWindow | None = None
-        self._tray: "TrayIcon | None" = None
+        self._tray: TrayIcon | None = None
 
-    def do_activate(self) -> None:  # noqa: D401 — GTK callback
+    def do_activate(self) -> None:
         if self._window is None:
             self._window = MainWindow(
                 self, self._controller, self._model, self._cfg,
@@ -296,9 +297,9 @@ class AudioSpiderApp(Gtk.Application):
 
 
 def run_gui(
-    controller: "Controller",
-    model: "GraphModel",
-    cfg: "Config",
+    controller: Controller,
+    model: GraphModel,
+    cfg: Config,
     *,
     no_tray: bool,
     minimized: bool,

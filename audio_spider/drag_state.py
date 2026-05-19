@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from .graph_model import GraphModel, PortKind
+from audio_spider.graph_model import GraphModel, PortKind
 
 
 @dataclass(frozen=True)

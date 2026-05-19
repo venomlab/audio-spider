@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
 
+from typing import TYPE_CHECKING
+
 from gi.repository import AyatanaAppIndicator3 as AppIndicator  # noqa: E402
 from gi.repository import Gtk  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class TrayIcon:

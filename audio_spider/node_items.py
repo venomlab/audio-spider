@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from typing import Callable
-
 import gi
 
 gi.require_version("GooCanvas", "2.0")
 
+from typing import TYPE_CHECKING
+
 from gi.repository import GooCanvas, Pango  # noqa: E402
 
-from .graph_model import Edge, Node, NodeKind, Port, PortKind
+from audio_spider.graph_model import Edge, Node, NodeKind, Port, PortKind
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 NODE_WIDTH = 200.0
 NODE_HEADER_HEIGHT = 28.0
@@ -79,7 +82,7 @@ class NodeItem(GooCanvas.CanvasGroup):
     children use local coordinates relative to the group origin.
     """
 
-    def __init__(self, node: Node, **kwargs):
+    def __init__(self, node: Node, **kwargs) -> None:
         super().__init__(**kwargs)
         self._node = node
         self._port_index: dict[str, tuple[float, float]] = {}  # in group-local coords
@@ -109,7 +112,8 @@ class NodeItem(GooCanvas.CanvasGroup):
         """Return port center in canvas (absolute) coordinates."""
         local = self._port_index.get(port_id)
         if local is None:
-            raise KeyError(f"unknown port: {port_id}")
+            msg = f"unknown port: {port_id}"
+            raise KeyError(msg)
         lx, ly = local
         return self._node.x + lx, self._node.y + ly
 
@@ -175,7 +179,7 @@ class NodeItem(GooCanvas.CanvasGroup):
             width=NODE_WIDTH - 16,
             anchor=GooCanvas.CanvasAnchorType.CENTER,
             alignment=Pango.Alignment.CENTER,
-            **{"font": "Sans Bold 10"},
+            font="Sans Bold 10",
         )
         text.node_id = self._node.id
 
@@ -250,7 +254,7 @@ class EdgeItem(GooCanvas.CanvasGroup):
     geometry, and lets users grab the edge without aiming pixel-precisely.
     """
 
-    def __init__(self, edge: Edge, path_provider: Callable[[Edge], str], **kwargs):
+    def __init__(self, edge: Edge, path_provider: Callable[[Edge], str], **kwargs) -> None:
         super().__init__(**kwargs)
         self._edge = edge
         self._path_provider = path_provider
